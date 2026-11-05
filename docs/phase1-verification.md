@@ -1,7 +1,8 @@
 # Verifiche Fase 1 — 5 novembre 2026
 
-Branch `feat/core-refactor`. Modularizzazione software completata; verifiche
-hardware NOT RUN. Nessun commit automatico, push, installazione, upload o
+Branch `feat/core-refactor`. Modularizzazione software completata. Ricezione OSC
+reale e tara verificate dall'utente; rate IMU ed equivalenza temporale NOT RUN.
+I risultati hardware aggiornati sono nella sezione finale. Nessun commit automatico, push, installazione, upload o
 modifica della configurazione del computer. Toolchain e opzioni invariate in
 `toolchain.lock.json` e `scripts/compile.sh` (FQBN `esp32:esp32:XIAO_ESP32C3`).
 
@@ -173,7 +174,9 @@ Non è una prova bit per bit della matematica sul processore ESP32.
 | Parser e UDP localhost | PASS | Test Fase 0 invariati, con permesso socket fuori sandbox |
 | Diff whitespace e sintassi shell | PASS | `git diff --check`, `bash -n scripts/compile.sh` |
 | Arduino IDE GUI | NOT RUN | Compilata via CLI la struttura Arduino compatibile |
-| Hardware, Wi-Fi reale, OSC XIAO | NOT RUN | Nessun dispositivo usato |
+| Ricezione OSC reale dalla XIAO | PASS | Riepiloghi di due catture forniti dall'utente, dettagli nella sezione finale |
+| Tara fisica | PASS | Verifica funzionale confermata dall'utente; nessuna misura quantitativa della precisione |
+| Wi-Fi: portale, persistenza, riconnessione | NOT RUN | La ricezione sulla rete reale non verifica questi scenari |
 | Rate IMU, jitter, overhead e prestazioni | NOT RUN | Nessuna equivalenza temporale dedotta dalle build o dal loopback |
 
 La prima suite in sandbox ha dato FAIL soltanto sul bind UDP localhost
@@ -213,7 +216,9 @@ sequenza e contatori in RAM; raggruppamento delle letture prima dei calcoli.
 Fusion mode, remap e conversioni restano invariati; lo stato `Ready` descrive
 l'esito delle operazioni, non la calibrazione Bosch.
 
-Tutte le seguenti prove sono **NOT RUN**, da eseguire successivamente:
+La checklist seguente era inizialmente tutta NOT RUN. Ricezione OSC e tara
+funzionale sono ora PASS secondo le evidenze dell'utente riportate in fondo;
+gli altri scenari restano da verificare:
 
 1. Cablaggio SDA GPIO6/D4, SCL GPIO7/D5 e indirizzo 0x29 confermati dall'utente.
    Restano da provare inizializzazione, alimentazione, cristallo e remap P0;
@@ -268,3 +273,39 @@ alle formule, ai riferimenti di taratura o al protocollo.
 Log dei test in `.build/hardware-update-baseline-tests.log` e
 `.build/hardware-update-core-tests.log`. Baseline storica immutata con GPIO 5/6;
 le note nei documenti della Fase 0 distinguono quei valori dalla mappa corrente.
+
+
+## Risultati hardware riferiti dall'utente
+
+L'utente ha fornito i riepiloghi dell'analizzatore per due prove sulla XIAO e
+ha confermato personalmente il funzionamento della tara. Nessuna misura hardware
+è stata eseguita dall'agente; file JSONL grezzi, istante della tara, hash del
+firmware caricato e condizioni dettagliate non sono stati esaminati.
+
+| Metrica di ricezione sul Mac | Prova senza tara | Prova con tara a metà |
+| --- | ---: | ---: |
+| Datagrammi UDP / pacchetti OSC validi | 4.986 / 4.986 | 2.844 / 2.844 |
+| Messaggi OSC | 19.944 | 11.376 |
+| Pacchetti invalidi | 0 | 0 |
+| Pacchetti ricevuti/s | 99,828483 | 99,852642 |
+| Intervallo medio (ms) | 10,017181 | 10,014758 |
+| Intervallo mediano (ms) | 10,047292 | 10,040500 |
+| Intervallo p95 (ms) | 12,887208 | 12,891916 |
+| Intervallo massimo (ms) | 19,548167 | 24,162041 |
+| Jitter, deviazione standard popolazione (ms) | 1,606627 | 1,692328 |
+
+- PASS: ricezione OSC reale, quattro messaggi per pacchetto in media e nessun
+  pacchetto invalido nei riepiloghi. Questi conteggi non verificano da soli
+  indirizzi, tipi e valori di ogni messaggio, né dimostrano assenza di perdite.
+- PASS: tara funzionale sulla XIAO, verificata e confermata dall'utente.
+  Non equivale a una misura quantitativa della precisione o a tutti i test di
+  assi, limiti yaw e tarature ripetute previsti nella checklist.
+- NOT RUN: frequenza delle acquisizioni firmware, frequenza interna BNO055,
+  jitter delle acquisizioni, equivalenza temporale con baseline e overhead.
+  Il jitter di ricezione riportato sopra è invece misurato dal Mac. Non è
+  possibile attribuire il massimo intervallo della seconda prova alla tara.
+
+Queste misure mancanti non bloccano la chiusura software della Fase 1; restano
+attività di caratterizzazione successive. La Fase 2 non è autorizzata da questo
+aggiornamento. Aggiornata solo la documentazione: compilazione e test non
+rieseguiti, risultati software precedenti invariati.
