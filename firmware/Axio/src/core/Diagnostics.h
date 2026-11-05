@@ -7,9 +7,13 @@ struct Diagnostics {
   uint64_t lastReadUs=0, maxReadUs=0, lastSendUs=0, maxSendUs=0;
   uint64_t lastStartUs=0, lastIntervalUs=0, maxIntervalUs=0;
   uint64_t lastProcessUs=0, maxProcessUs=0;
+  double intervalMeanUs=0, intervalM2Us=0;
   void beginRead(uint64_t now) {
     if (attempts) {
       lastIntervalUs = now - lastStartUs;
+      double delta=double(lastIntervalUs)-intervalMeanUs;
+      intervalMeanUs+=delta/double(attempts);
+      intervalM2Us+=delta*(double(lastIntervalUs)-intervalMeanUs);
       if (lastIntervalUs > maxIntervalUs) maxIntervalUs = lastIntervalUs;
     }
     lastStartUs = now;

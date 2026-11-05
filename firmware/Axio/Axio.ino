@@ -4,6 +4,7 @@
 #include "src/core/ImuManager.h"
 #include "src/core/Scheduler.h"
 #include "src/transport/LegacyTransport.h"
+#include "src/transport/OscRuntime.h"
 #include "src/diagnostics/UsbDiagnostics.h"
 #if !ARDUINO_USB_CDC_ON_BOOT
 #error "Axio USB diagnostics require USB CDC On Boot: Enabled"
@@ -22,18 +23,23 @@ axio::Scheduler scheduler;
 void calibrateReference() { imuManager.calibrateReference(); }
 struct DiagnosticPlatform {
   uint64_t nowUs() { return monotonicClock.nowUs(); }
-  axio::RuntimeStatus status() { return legacyRuntimeStatus(); }
-  bool tare() { return imuManager.calibrateReference(); }
+  axio::RuntimeStatus status() { return oscRuntimeStatus(); }
+  bool configCommand(const char *id,char *command,char *out) {return oscConfigCommand(id,command,out);}
+  void resetMetrics() {resetOscMetrics();}
+  void metricsJson(char *out,size_t cap) {oscMetricsJson(out,cap);}
+  bool tare() { return tareOscRuntime(); }
 } diagnosticPlatform;
 axio::DiagnosticService<DiagnosticPlatform> diagnosticService(tracker, diagnosticPlatform);
 axio::UsbDiagnostics<decltype(diagnosticService)> usbDiagnostics(diagnosticService);
 
 void setup() {
   setCpuFrequencyMhz(160);
+  Serial.setRxBufferSize(decltype(usbDiagnostics)::RxCapacity);
   Serial.begin(115200);
   Serial.setTxTimeoutMs(0);
   setupLegacyTransport(calibrateReference);
   imuManager.begin();
+  setupOscRuntime([]()->bool { return imuManager.calibrateReference(); });
 }
 
 void loop() {
@@ -45,10 +51,10 @@ void loop() {
       auto &d = tracker.diagnostics;
       d.lastProcessUs = start - acquireStart - d.lastReadUs;
       if (d.lastProcessUs > d.maxProcessUs) d.maxProcessUs = d.lastProcessUs;
-      sendLegacySample(tracker.latest);
+      tickOscRuntime(tracker.latest, start);
       d.sent(monotonicClock.nowUs() - start);
     }
   }
-  checkIncomingOSC();
+  pollOscRuntime();
   usbDiagnostics.poll(Serial, uint32_t(millis()));
 }

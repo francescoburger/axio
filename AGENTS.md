@@ -2,8 +2,8 @@
 
 - Progetto Axio, repository axio; Seeed XIAO ESP32C3 e BNO055, macOS,
   Arduino IDE e CLI. Sketch principale: `firmware/Axio/Axio.ino`.
-- Fase corrente: **1**, modularizzazione autorizzata. Non iniziare Fase 2,
-  dashboard, nuovo motore OSC o altre funzionalità senza richiesta esplicita.
+- Fase **2 completata e approvata** dall'utente, inclusi i Checkpoint A e B.
+  Non iniziare Fase 3, dashboard o altre funzionalità senza nuova richiesta.
 - `reference/HandTrackerV1_1.ino` è immutabile: niente rinomina, correzioni,
   formattazione o sostituzione. Hash atteso in `tests/test_baseline.py` e
   `docs/baseline-v1.1.md`. Anche i difetti storici vanno documentati, non corretti.
@@ -32,9 +32,9 @@
 - Classificare ogni verifica PASS, FAIL o NOT RUN; registrare limiti e warning.
   Nessun risultato hardware inventato; ricezione OSC non misura il rate IMU.
 
-Vincoli delle fasi future, senza implementazione autorizzata ora:
+Vincoli di prodotto e delle fasi future:
 
-- OSC configurabile, dashboard web LAN senza autenticazione, più reti Wi-Fi,
+- OSC configurabile autorizzato al Checkpoint B; dashboard web LAN senza autenticazione, più reti Wi-Fi,
   fallback AP protetto, mDNS, pulsante, LED, batteria e deep sleep.
 - Nessun obbligo di protocollo OSC Legacy nella versione finale.
 - Nessun limite fisso a destinazioni o messaggi OSC prima dei benchmark.

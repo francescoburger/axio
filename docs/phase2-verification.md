@@ -1,4 +1,23 @@
-# Fase 2 — Checkpoint A
+# Fase 2 — verifiche Checkpoint A e B
+
+**6 novembre 2026: Checkpoint B approvato dall'utente e Fase 2 dichiarata
+completata per le funzionalità previste.** Controllo finale prima del commit:
+build PASS (flash 1.163.029 B, RAM globale 94.116 B), 28 regressioni PASS con
+1.345 vettori matematici invariati, controlli whitespace PASS. Log locali:
+`.build/phase2-final-commit-compile.log` e `.build/phase2-final-commit-tests.log`.
+Indice verificato comprensivo delle tre correzioni hardware; esclusi catture,
+log, ambiente virtuale e artefatti. Commit locale autorizzato con messaggio
+`feat: complete phase 2 configurable OSC engine and hardware validation`.
+Nessun nuovo upload o collaudo hardware in questa chiusura; restano NOT RUN
+tara/ACK fisico, power-cut/corruzione NVS reale, frammentazione/blocco massimo
+allocabile, benchmark di capacità/endurance e verifica GUI Arduino IDE.
+Nessun push o avvio della Fase 3.
+
+Stato attuale: Checkpoint A approvato e committato; Checkpoint B verificato su
+software e XIAO con correzioni mirate, configurazione originale ripristinata.
+IMU 99,947 Hz, ricezione Mac 99,942 pacchetti/s nella prova finale. Benchmark di
+capacità, tara fisica e power-cut NVS NOT RUN. Vedere le sezioni finali e
+[lo schema OSC](phase2-osc.md). Le sezioni iniziali documentano il Checkpoint A.
 
 5 novembre 2026, branch `feat/osc-engine`. Infrastruttura seriale e strumenti
 host implementati. **Checkpoint B in attesa della conferma dell'utente**:
@@ -376,3 +395,316 @@ contatori in avanzamento. Non sostituisce i test matematici e non verifica la
 tara fisica o il futuro motore OSC. Nessuna tara, reset dei contatori o comando
 di modifica persistente alla configurazione inviato. Nessun commit o push;
 Checkpoint B ancora in attesa.
+
+## Checkpoint A approvato e commit locale
+
+L'utente ha approvato upload/USB/BNO055 e misura 99,774 Hz. Prima del commit:
+compilazione PASS (`.build/checkpoint-a-commit-compile.log`), tutti i 18 test
+PASS (`.build/checkpoint-a-commit-tests.log`), `git diff --check` e controllo
+indice PASS. Tutti i 16 file necessari inclusi; nessun file sorgente A rimasto
+non tracciato. `.build/`, `.venv/` e `captures/` confermati ignorati e non inclusi.
+
+Commit locale: **`30cd5e147d04b30691ae78711e5b743d312e44b0`**.
+Messaggio: **`feat: complete phase 2 checkpoint A USB diagnostics and hardware tests`**.
+Working tree pulito subito dopo il commit; nessun push. L'autorizzazione seguente
+ha avviato il Checkpoint B, descritto sotto. Le sezioni precedenti restano come
+cronologia delle evidenze del Checkpoint A, non stato attuale del motore OSC.
+
+## Checkpoint B — verifica software conclusa
+
+Implementati motore configurabile e catalogo campi, più destinazioni, argomenti
+ordinati, rate per messaggio, bundle, token `{id}`, preset Orientation/Motion/
+Custom modificabili, listener/tara/ACK configurabili. Configurazione schema 1
+validata integralmente, preparata e salvata su journal NVS a due slot con CRC e
+selettore atomico, poi attivata senza reboot; recupero della precedente o default.
+Nessuna dashboard, Fase 3, nuova dipendenza firmware, installazione o upload B.
+Nessun ulteriore commit automatico del Checkpoint B; nessun push.
+
+Schema completo, catalogo con tipi e intervalli, limiti provvisori, migrazione,
+strategie di ripristino e procedura XIAO in [phase2-osc.md](phase2-osc.md).
+L'infrastruttura USB resta attiva, stesso protocollo v1 e ID; buffer portati a
+8.192 B input e 12.288 B risposta per accettare configurazioni complete.
+Core matematico, manager IMU, reference e fixture byte per byte invariati.
+
+Comandi effettivamente eseguiti:
+
+```sh
+bash scripts/compile.sh > .build/phase2-b-compile-final.log 2>&1
+python3 -B -m unittest discover -s tests -v > .build/phase2-b-tests.log 2>&1
+bash -n scripts/compile.sh scripts/upload.sh
+git diff --check
+python3 -B tools/osc_benchmark.py --ip 192.168.1.4 --output .build/phase2-b-benchmark-plan.json
+python3 -B tools/osc_config.py --preset Orientation --ip 192.168.1.4 --id 3 > .build/phase2-b-orientation.json
+```
+
+| Verifica | Esito | Evidenza / limite |
+| --- | --- | --- |
+| Build esp32:esp32:XIAO_ESP32C3 | PASS | Toolchain e partizione invariate, nessun upload |
+| Suite completa | PASS | 28 test: 18 precedenti e 10 nuovi, 1.345 vettori invariati |
+| Protocollo USB conservato | PASS | Comandi, timeout/rollover, JSONL, errori, backpressure e buffer aggiornati |
+| Codec OSC, campi e routing multiplo | PASS | Byte produzione decodificati su Python, float fuori nominale preservati |
+| Bundle immediati e ordine argomenti | PASS | Pacchetti reali del codec, percorso bundle e messaggio singolo |
+| OSC localhost | PASS | Pacchetti produzione trasmessi/ricevuti su socket Mac loopback |
+| Preset e schema completo | PASS | Roundtrip JSON canonico; rifiuto duplicati, unknown, route/porta/rate/campi invalidi |
+| Limiti tecnici e dimensione pacchetti | PASS | 36 scenari validati su host; config troppo grandi o bundle oltre limite rifiutati |
+| Scheduler e frequenze | PASS | Clock sintetico, 25 Hz, snapshot duplicato scartato, nessun catch-up dopo pausa |
+| Persistenza e ripristino | PASS | Journal reale con memoria fake: reboot, CRC corrotto, commit/scrittura falliti, slot non committato ignorato |
+| Applicazione atomica | PASS | Transaction reale e runtime: listener/NVS falliti mantengono configurazione; GET dopo reboot fake |
+| Runtime seriale B | PASS | OscRuntime.cpp compilato con adattatori host; VALIDATE/APPLY/GET, INFO/METRICS e 8 destinazioni/16 messaggi |
+| Tara OSC e ACK | PASS | Callback comune, formato esatto ,i=1, nessun ACK se fallisce, padding rigoroso |
+| Media/deviazione intervalli IMU | PASS | Welford produzione con intervalli noti, nessuna modifica alle formule IMU |
+| Strumenti Python/shell e whitespace | PASS | Sintassi e git diff --check |
+| Benchmark reali 1/2/4/8 e 4/8/16 | NOT RUN | Piano generato con 36 scenari, tutti NOT RUN; nessuna simulazione come misura |
+| Upload/test USB del firmware B | NOT RUN | Preparati, non eseguiti |
+| OSC XIAO, ACK fisico, routing LAN | NOT RUN | Tool e comandi pronti, richiedono upload B e configurazione esplicita |
+| NVS/power-cut reali, heap e overhead B | NOT RUN | Solo fault injection host, da misurare su scheda |
+
+Il primo test UDP B nel sandbox è stato bloccato (`Operation not permitted`);
+rieseguito fuori sandbox con autorizzazione: PASS. Un primo warning locale di
+API UDP flush deprecata è stato corretto usando clear prima della build finale.
+Restano warning noti delle dipendenze OSC e WiFiManager già documentati; le
+build con cache non li ristampano sempre. Nessun warning Axio irrisolto osservato.
+
+| Versione | Flash | RAM globale | RAM residua statica |
+| --- | ---: | ---: | ---: |
+| Fase 1 | 1.126.869 B | 39.660 B | 288.020 B |
+| Checkpoint A committato | 1.133.051 B | 42.796 B | 284.884 B |
+| Checkpoint B | 1.163.007 B | 94.116 B | 233.564 B |
+| B − A | +29.956 B | +51.320 B | −51.320 B |
+| B − Fase 1 | +36.138 B | +54.456 B | −54.456 B |
+
+Flash 88% di 1.310.720 B, RAM globale 28% di 327.680 B. Buffer fissi di comando,
+risposta, journal e configurazione spiegano gran parte dell'incremento RAM.
+Workspace diagnostico persistente evita grandi buffer sullo stack del loop.
+Questi dati non misurano heap runtime, stack massimo, CPU o sostenibilità 100 Hz.
+Il margine flash resta nella stessa partizione; non è stata cambiata per far
+entrare il firmware. I 99,774 Hz hardware del Checkpoint A non si trasferiscono
+al Checkpoint B senza nuova misura.
+
+Nuovi file B:
+
+- `firmware/Axio/src/osc/Config.h`, `Codec.h`, `Engine.h`, `Journal.h`, `Transaction.h`.
+- `firmware/Axio/src/transport/OscRuntime.h`, `OscRuntime.cpp`.
+- `tools/osc_config.py`, `osc_benchmark.py`, `osc_hardware_test.py`.
+- `tests/osc_engine_harness.cpp`, `osc_runtime_harness.cpp`, `test_osc_engine.py`.
+- `tests/stubs/runtime/{Arduino,WiFi,WiFiUdp,Preferences,esp_timer}.h`.
+- `docs/phase2-osc.md`.
+
+Modificati B: AGENTS.md (autorizzazione attuale), README, indice src, Axio.ino,
+Diagnostics.h (statistiche intervalli), DiagnosticService.h, SerialProtocol.h,
+LegacyTransport.cpp (listener e campi OSC portale affidati al motore),
+hardware_test.py e test_serial.py (limiti aggiornati), questo rapporto.
+
+Rischi da verificare: NVS piena e power-cut fisico, latenza delle API sincrone
+NVS/I²C/UDP, risorse durante cambio listener, riconnessione rete/riavvio,
+combinazioni intensive CPU/heap e jitter durante polling seriale. Nessuna
+sostenibilità prestazionale o limite definitivo dichiarato. In condizioni normali
+il parser non attende input/TX; APPLY e TARE possono prolungare un giro del loop
+con le operazioni sincrone necessarie e sono esclusi dalle finestre benchmark.
+
+## Collaudo hardware Checkpoint B autorizzato — esito finale PASS
+
+La XIAO su `/dev/cu.usbmodem2101` era già confermata dall'utente. Nessuna nuova
+richiesta di identità, nessun commit o push, nessuna Fase 3. Le modifiche già
+nell'indice sono state ispezionate e salvate come patch locale in
+`.build/checkpoint-b-index-before-hardware.patch`; confronto byte identico con
+la patch dell'indice prima di integrare le correzioni: PASS. Nessun reset Git
+né perdita delle modifiche precedenti.
+
+Compilazione/upload iniziali B PASS. Dopo due correzioni firmware motivate dai
+risultati reali sono state completate build, regressioni e upload correttivi.
+Terza e ultima build caricata: **flash 1.163.029 B, RAM globale 94.116 B**;
+esptool ha verificato l'hash e riavviato. Gli upload non hanno cancellato NVS.
+Nessun caricamento ripetuto per tentativi senza una causa identificata.
+
+### Risultati conclusivi
+
+| Prova | Esito | Evidenza reale / limite |
+| --- | --- | --- |
+| Build/upload finale XIAO ESP32C3 | PASS | `.build/checkpoint-b-scheduler-fix-compile.log`, `...-upload.log` |
+| Regressioni software dopo correzioni | PASS | 28 test, 1.345 vettori invariati, `.build/checkpoint-b-scheduler-fix-tests.log` |
+| USB PING/INFO/STATUS/CONFIG GET/METRICS | PASS | `captures/checkpoint-b-validated-usb.json`, exit 0 |
+| BNO055 / motore | PASS | ready, sample_valid true, configurable, listener attivo, Wi-Fi connesso |
+| Misura IMU >=10 s | PASS | 1.005 acquisizioni in 10,055290 s = **99,947391 Hz** |
+| OSC originale dopo correzione 100 Hz | PASS | 1.200 datagrammi, 2.400 messaggi validi sul Mac in cattura da 12 s |
+| Routing moderato multi-destinazione | PASS | 2 endpoint Mac, 4 messaggi a 25/50 Hz, bundle e messaggio singolo |
+| Persistenza configurazione moderata | PASS | riavvio reale, uptime ridotto, GET identico e config_source saved; ricezione dopo reboot PASS |
+| Ripristino originale e persistenza | PASS | JSON identico prima/dopo reboot e nell'ultima lettura dopo upload finale |
+| ACK di tara su host/mock | PASS | formato ,i=1 e assenza ACK se callback fallisce, harness produzione nelle 28 regressioni |
+| Tara fisica / ACK reale | NOT RUN | esplicitamente esclusi; nessun comando TARE o OSC /tare inviato |
+| DIAG RESET | NOT RUN | mai inviato; i riavvii e APPLY hanno i reset interni già documentati |
+| Frammentazione / massimo blocco allocabile | NOT RUN | non esposti nel protocollo seriale attuale; non dedotti da heap libero/minimo |
+| Corruzione/power-cut NVS fisico | NOT RUN | ripristino da reboot valido reale PASS; fault injection solo host |
+| Capacità massima / endurance | NOT RUN | carico moderato, nessuna conclusione sui limiti definitivi |
+
+Report riassuntivo reale: `captures/checkpoint-b-hardware-summary.json` (PASS).
+Stato/GET/METRICS finali: `captures/checkpoint-b-final-state.json`.
+Tutti i file captures sono locali, ignorati da Git; nessuna credenziale salvata.
+I NOT RUN delle prove dedicate OSC/persistenza nel solo hardware_test.py non
+significano che queste prove non siano state effettuate: sono nei report OSC
+e di persistenza separati indicati qui.
+
+### Frequenze e ricezione
+
+Confronto col riferimento A **99,774 Hz**, senza dedurre equivalenza o miglioramento
+statistico da finestre e condizioni diverse:
+
+| Condizione reale | Finestra firmware | Acquisizioni IMU/s |
+| --- | ---: | ---: |
+| Primo firmware B, prima correzioni | 10,055997 s | 99,940364 |
+| B con RX corretta | 10,045221 s | 99,948025 |
+| Carico moderato, prima reboot | 12,080436 s | 99,499720 |
+| Carico moderato, dopo reboot | 12,061092 s | 99,493479 |
+| Firmware finale, originale ripristinato | 10,055290 s | **99,947391** |
+
+La differenza finale da A è **+0,173391 Hz (+0,173784%)**. Nessun errore init,
+lettura o tara nei contatori finali; tare_requests=0. Acquisizioni complete e
+snapshot coincidono, non sono misure del rate interno di fusione BNO055.
+
+Nella finestra finale firmware: **1.005 tentativi UDP, 1.005 accettati localmente**,
+rate di scheduling messaggi **99,947619 Hz**. Questo non è un ACK di consegna.
+Dall'avvio, 3.315 tentativi e 3.299 accettati alla seconda lettura METRICS: 16
+non accettati prima della finestra stabile, durante l'avvio. Non nascosti né
+confusi con perdita di datagrammi sulla LAN.
+
+Cattura indipendente Mac `captures/checkpoint-b-validated-osc.jsonl`:
+
+- XIAO **192.168.1.15:16889** → Mac **192.168.1.4:16888**.
+- **1.200 pacchetti OSC validi, 2.400 messaggi, 0 malformati**.
+- Ricezione **99,942397 pacchetti/s**, intervallo medio **10,005764 ms**,
+  p95 **12,565959 ms**, massimo **17,941 ms**, jitter stddev popolazione
+  **1,416034 ms**. Jitter di ricezione Mac, non jitter IMU.
+- `/orientation/3` con tag `,fff`; `/quaternion/3` con `,ffff`, bundle immediato 1.
+  Valori finiti verificati, senza clamp o rigetto fuori nominale.
+
+Un esempio reale della cattura prima delle correzioni aveva orientation
+`[0.005555556, 0.011111111, -0.055555556]` e quaternion
+`[0.995544434, -0.092407227, -0.015014648, -0.009216309]`.
+I valori seguono le formule storiche, non costituiscono una verifica metrologica
+con pose note. Nessuna tara per produrre questi valori.
+
+Finestre USB di circa 10 s e cattura Mac da 12 s diverse: i conteggi non
+consentono di dichiarare zero perdite. Anche i ricevitori integrati aprono socket
+prima di CONFIG GET/METRICS e possono avere pacchetti iniziali in coda: frequenze
+per porta e conteggi delle prove integrate hanno questo limite ai bordi. La
+cattura finale indipendente evita quel setup seriale nel ricevitore.
+
+### Carico moderato e persistenza
+
+Configurazione originale salvata prima delle prove in
+`captures/checkpoint-b-original-config.json`: Orientation, ID 3,
+192.168.1.4:16888, listener 16889, /tare, ACK disabilitato. La prova temporanea
+`captures/checkpoint-b-moderate-config.json` ha usato listener **16989** e due
+endpoint sullo stesso Mac (**16900**, **16901**), non due host fisici distinti:
+
+| Messaggio | Campi ordinati | Hz | Route | Bundle |
+| --- | --- | ---: | --- | --- |
+| /test/orientation/3 | yaw,pitch,roll | 25 | entrambe | sì |
+| /test/quaternion/3 | q0,q1,q2,q3 | 25 | entrambe | sì |
+| /test/motion/3 | axWorld,ayWorld,azWorld | 50 | 16900 | no |
+| /test/gyro/3 | gz,gx,gy | 25 | 16901 | sì |
+
+Nella prova moderata finale: rate firmware **24,999081 / 49,998162 Hz**;
+1.208 UDP tentati e accettati nella finestra METRICS. Sul Mac, 907 datagrammi
+sulla 16900 e 302 sulla 16901; 302 orientation/quaternion su ciascuna route,
+605 motion sulla 16900 e 302 gyro sulla 16901. Zero pacchetti malformati.
+Il jitter aggregato della 16900 mescola due cadenze e non misura da solo la rete.
+
+Dopo reboot: 906 datagrammi sulla 16900 e 302 sulla 16901, zero malformati;
+rate scheduling circa **24,956196 / 49,995303 Hz**. Queste prove a 25/50 Hz sono
+state eseguite sul firmware con RX corretta, prima della successiva correzione
+del solo ramo a 100 Hz; i rami a 25/50 Hz non sono cambiati, regressioni PASS.
+
+Report principali:
+
+- `captures/checkpoint-b-retest-osc-moderate.json`.
+- `captures/checkpoint-b-retest-osc-after-reboot.json`.
+- `captures/checkpoint-b-persistence-and-restore-03.json`: 16 verifiche PASS,
+  restored=true. Uptime moderato **163.469.068 → 5.823.427 µs**; originale
+  ripristinato **18.310.737 → 5.874.193 µs**.
+- `captures/checkpoint-b-retest-osc-restored.json`: ricezione originale dopo reboot.
+
+Riavvii con `esptool --port /dev/cu.usbmodem2101 --after hard-reset run`:
+caricamento stub solo in RAM e reset, nessuna riscrittura firmware/NVS. Porta
+invariata; nessun intervento fisico necessario. Alla fine, GET è identico
+all'originale anche dopo l'ultimo upload. L'originale era inizialmente generato
+come default; il ripristino ne ha salvato gli stessi valori nel journal
+(`config_source:saved`). Non è stata cancellata la configurazione Wi-Fi.
+
+### Memoria reale e cause RAM statica
+
+STATUS finale: heap libero **133.084 B**, minimo dal boot **129.068 B**.
+Nella misura USB finale, heap libero 133.356 B e stesso minimo; nei passaggi
+precedenti è stato osservato un minimo di 126.828 B in un altro boot, da non
+mescolare con il minimo del boot finale. Nessuna misura di frammentazione o
+blocco massimo: il firmware non espone questi dati via USB, e il solo heap
+libero non basta per calcolarli. Nessuna prova di assenza di leak su lunga durata.
+
+| Build | Flash | RAM globale |
+| --- | ---: | ---: |
+| A | 1.133.051 B | 42.796 B |
+| B prima collaudo | 1.163.007 B | 94.116 B |
+| B finale corretto | **1.163.029 B** | **94.116 B** |
+| Finale − A | +29.978 B | +51.320 B |
+
+Analisi mediante `riscv32-esp-elf-nm -S --size-sort -C` sull'ELF reale,
+conservata in `.build/checkpoint-b-final-symbols.txt`. Principali incrementi:
+
+| Componente | Incremento RAM statica rispetto ad A |
+| --- | ---: |
+| Parser/riposta USB: input 1.024→8.192 e output 2.048→12.288 | 17.408 B |
+| Workspace persistente DiagnosticService | 5.000 B |
+| Journal (buffer blob + JSON) | 14.368 B |
+| JSON canonico configurazione | 7.169 B |
+| Engine (config attiva, packet buffer, scheduler, metriche) | 3.864 B |
+| Configurazione candidata | 1.876 B |
+| Buffer ricezione UDP | 1.400 B |
+| Altri stati/network/allineamenti, residuo | 235 B |
+| Totale | **51.320 B** |
+
+La correzione RX alloca **8.193 byte di coda** tramite HWCDC al posto dei 256
+predefiniti, una volta prima di Serial.begin. È heap limitato, non ulteriore
+RAM statica; il costo osservato va quindi distinto dai 51.320 B sopra. Il primo
+B senza questa correzione mostrava heap libero 141.908 B/minimo 135.568 B.
+Workspace e buffer statici hanno costi noti, ma non sono limiti definitivi:
+ottimizzazioni e margini dinamici richiedono i benchmark di capacità successivi.
+
+Max tempi cumulativi nel METRICS finale della finestra USB: letture **7.973 µs**,
+elaborazione/bookkeeping **726 µs**, invio dispatch **1.681 µs**, intervallo
+acquisizioni **12.004 µs**; stddev intervalli tentativi IMU **92,494 µs**.
+Durante APPLY moderato max_config_us **8.772 µs** e massimo intervallo cumulativo
+**19.000 µs**: NVS e cambio socket sono sincroni, fuori dalla finestra stabile.
+Questi massimi includono la strumentazione e non sono tempi puri del bus.
+
+### Errori risolti e regressioni
+
+1. **FAIL iniziale — richiesta CONFIG troncata**: payload moderato 678 B più
+   framing, coda RX HWCDC predefinita 256 B; ISR del core scarta byte se piena.
+   Esito `incomplete_timeout`, prima di APPLY. Correzione limitata: configurare
+   RX a MaxLine+1 prima di Serial.begin. Test burst massimo su host usando
+   UsbDiagnostics di produzione e porta fake, build e 28 regressioni PASS;
+   validazione/APPLY reali del payload moderato poi PASS.
+2. **FAIL controllo reboot — risposta di sessione precedente**: client nuovi
+   ripartivano da ID 1; PING tardivo scambiabile con STATUS. Config originale
+   ripristinata dal finally, ma test uptime fallito. Correzione client: prefisso
+   casuale di sessione 8 hex + contatore 8 hex; nessun retry automatico di APPLY.
+   Test risposta vecchia ignorata, ID distinti fra client e collaudo reale PASS.
+3. **Underrate OSC 100 Hz**: alcune finestre ~94,8–95,7 pacchetti/s pur con IMU
+   ~99,95 Hz, con meno eventi scheduled già nel firmware. Non attribuito a
+   perdita Wi-Fi. A 100 Hz il doppio gating sui timestamp di completamento
+   scartava snapshot per jitter; corretto per seguire ogni snapshot nuovo del
+   core a periodo 10 ms. Sequenze duplicate ancora scartate; nessun catch-up,
+   nessuna modifica al core o alla matematica. Nuovo vettore di jitter nel
+   harness e verifica reale finale ~99,947 Hz scheduling / ~99,942 Hz Mac PASS.
+
+Conservati i report FAIL delle prove precedenti
+`checkpoint-b-persistence-and-restore.json` e `...-02.json`; il report
+conclusivo è `...-03.json` più il summary, senza cancellare evidenze.
+Log delle tre regressioni in `.build/checkpoint-b-hardware-fix-tests.log`,
+`checkpoint-b-client-fix-tests.log`, `checkpoint-b-scheduler-fix-tests.log`.
+Nessun warning nuovo Axio irrisolto; warning storici delle dipendenze già noti.
+
+Modifiche correttive: Axio.ino, UsbDiagnostics.h, Engine.h, hardware_test.py e
+relativi harness/test. Matematica, reference e fixture immutate. README e schema
+operativo aggiornati con risultati e semantica 100 Hz. Le modifiche B iniziali
+sono conservate insieme alle correzioni; nessun nuovo commit, nessun push.

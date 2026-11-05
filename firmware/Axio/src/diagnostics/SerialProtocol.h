@@ -67,7 +67,7 @@ class JsonSyntax {
 
 class SerialProtocol {
  public:
-  static constexpr size_t MaxLine=1024, MaxReply=2048;
+  static constexpr size_t MaxLine=8192, MaxReply=12288;
   static constexpr uint32_t TimeoutMs=1000;
  private:
   char input[MaxLine+1] = {};

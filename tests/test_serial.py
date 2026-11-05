@@ -50,7 +50,7 @@ class SerialTests(unittest.TestCase):
     def test_malformed_and_bounded_input(self):
         wire = (b'AXIO 1 UNKNOWN\nAXIO 2 CONFIG VALIDATE {bad}\n'
                 b'AXIO 3 CONFIG APPLY {}\nAXIO 4 CONFIG VALIDATE {"x":[true,false,null,-2.5e+3,"a\\u0041"]}\n'
-                b'AXIO 5 PING\x00\nAXIO 6 ' + b'x'*1100 + b'\nAXIO 7 PING\n'
+                b'AXIO 5 PING\x00\nAXIO 6 ' + b'x'*8300 + b'\nAXIO 7 PING\n'
                 b'garbage\nAXIO bad! PING\nAXIO 01234567890123456 PING\n')
         rows = self.exchange(wire)
         self.assertEqual([r.get('error') for r in rows], ['unknown_command', 'invalid_json',
@@ -82,15 +82,28 @@ class SerialTests(unittest.TestCase):
                 result = self.response[:n]
                 del self.response[:n]
                 return bytes(result)
-        port = Port(b'# log\nboot ROM\n'+b'x'*2100+b'\n'+
+        port = Port(b'# log\nboot ROM\n'+b'x'*12300+b'\n'+
                     b'{"axio":1,"id":"old","ok":true,"data":{}}\n'+
                     b'{"axio":1,"id":"1","ok":true,"data":{"pong":true}}\n')
-        self.assertEqual(Client(port,.1).request('PING'), {'pong':True})
+        self.assertEqual(Client(port,.1,session_id='').request('PING'), {'pong':True})
         self.assertEqual(port.written,b'AXIO 1 PING\n')
         for response in (b'{bad}\n',b'{"axio":1,"id":"1","ok":false,"error":"imu_unavailable"}\n',
                          b'{"axio":1,"id":"1","ok":true,"data":[]}\n', b''):
             with self.subTest(response=response), self.assertRaises(ProtocolError):
-                Client(Port(response),.001).request('PING')
+                Client(Port(response),.001,session_id='').request('PING')
+        class EchoPort(Port):
+            def write(self, data):
+                ident=data.decode().split()[1]
+                self.written=data
+                # A successful response from a previous open must be ignored.
+                self.response.extend(b'{"axio":1,"id":"1","ok":true,"data":{"stale":true}}\n')
+                self.response.extend((json.dumps(dict(axio=1,id=ident,ok=True,data={'pong':True}))+'\n').encode())
+                return len(data)
+        first,second=EchoPort(b''),EchoPort(b'')
+        self.assertEqual(Client(first,.1).request('PING'),{'pong':True})
+        self.assertEqual(Client(second,.1).request('PING'),{'pong':True})
+        self.assertNotEqual(first.written,second.written)
+        self.assertEqual(len(first.written.decode().split()[1]),16)
 
     def test_rates_and_no_port_report(self):
         before = dict(window_us=1_000_000, acquired=10, snapshots=10, osc_attempts=10, read_errors=0)

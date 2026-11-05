@@ -6,6 +6,7 @@ import json
 import math
 from pathlib import Path
 import socket
+import secrets
 import sys
 import time
 
@@ -15,17 +16,22 @@ class ProtocolError(RuntimeError):
 
 
 class Client:
-    def __init__(self, port, timeout=2):
+    def __init__(self, port, timeout=2, session_id=None):
         self.port, self.timeout = port, timeout
+        # A delayed response can survive close/reopen of USB. Never reuse IDs
+        # across independent client sessions. Empty ID prefix is a test seam.
+        self.session_id = secrets.token_hex(4) if session_id is None else session_id
         self.sequence = 0
         self.buffer = bytearray()
         self.discard = False
 
     def request(self, command):
         self.sequence += 1
-        request_id = str(self.sequence)
+        if self.sequence > 0xffffffff:
+            raise ProtocolError('ID di sessione esauriti')
+        request_id = self.session_id + format(self.sequence, '08x') if self.session_id else str(self.sequence)
         wire = ('AXIO ' + request_id + ' ' + command + '\n').encode('ascii')
-        if len(wire) > 1025:
+        if len(wire) > 8193:
             raise ProtocolError('richiesta troppo lunga')
         if self.port.write(wire) != len(wire):
             raise ProtocolError('scrittura seriale incompleta')
@@ -59,7 +65,7 @@ class Client:
                 return row['data']
             elif not self.discard:
                 self.buffer.extend(byte)
-                if len(self.buffer) > 2048:
+                if len(self.buffer) > 12288:
                     self.buffer.clear()
                     self.discard = True
         raise ProtocolError('timeout risposta ' + command)
@@ -194,7 +200,7 @@ def main(argv=None):
                            ('wifi', 'wifi'), ('osc_receive', 'wifi_receiver')]:
         if name not in existing:
             record(name, 'NOT RUN', 'non raggiunto; vedere prerequisiti o errore hardware', category)
-    record('configuration_persistence', 'NOT RUN', 'Checkpoint B non implementato', 'persistent_change')
+    record('configuration_persistence', 'NOT RUN', 'richiede prova persistente esplicita con osc_config.py e riavvio', 'persistent_change')
     print(json.dumps(report, indent=2, allow_nan=False))
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)

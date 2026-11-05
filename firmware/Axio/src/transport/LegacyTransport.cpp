@@ -113,10 +113,6 @@ void setupLegacyTransport(void (*tare)()) {
   wm.setDebugOutput(false);
   prefs_setup();
 
-  wm.addParameter(&targetIp);
-  wm.addParameter(&port);
-  wm.addParameter(&id);
-  wm.setSaveConfigCallback(saveConfigCallback);
   wm.setBreakAfterConfig(true);
   wm.setConfigPortalBlocking(false);
 
@@ -129,7 +125,7 @@ void setupLegacyTransport(void (*tare)()) {
 
   Serial.print("# Listening for OSC on local port: ");
   Serial.println(localPort);
-  UDP.begin(localPort);
+  // The configurable engine owns the UDP listener.
 }
 void processLegacyPortal() { wm.process(); }
 axio::RuntimeStatus legacyRuntimeStatus() {

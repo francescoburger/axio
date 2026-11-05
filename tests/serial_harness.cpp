@@ -62,6 +62,15 @@ int main(int argc,char **) {
     assert(port.position==port.input.size());
     assert(std::count(port.output.begin(),port.output.end(),'\n')==2);
     assert(port.output.find("\"id\":\"1\"")<port.output.find("\"id\":\"2\""));
+    // Queue a complete maximum-size burst before any poll (I2C occupied).
+    Port burst;burst.space=64;
+    burst.input="AXIO burst "+std::string(axio::SerialProtocol::MaxLine-11,'x')+"\n";
+    assert(burst.input.size()==decltype(usb)::RxCapacity);
+    axio::UsbDiagnostics<decltype(service)> burstUsb(service);
+    for(int i=0;i<500;++i)burstUsb.poll(burst,0);
+    assert(burst.position==burst.input.size());
+    assert(burst.output.find("unknown_command")!=std::string::npos);
+    assert(burst.output.find("\"id\":\"burst\"")!=std::string::npos);
     assert(platform.tare());
     assert(platform.calibration.quatOffset.x()==-.5 && platform.calibration.yawOffset==123);
     auto before=platform.calibration.quatOffset;

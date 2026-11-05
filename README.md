@@ -1,12 +1,14 @@
 # Axio
 
-Fase 2, **Checkpoint A**: core modulare per Seeed XIAO ESP32C3 + BNO055,
-diagnostica USB JSON Lines e test hardware espliciti. Matematica V1.1 e OSC
-transitorio conservati; letture I²C fallite non vengono pubblicate. Il nuovo
-motore OSC attende la conferma al Checkpoint A. Dashboard e Fase 3 non avviate.
-Upload e test USB del nuovo firmware PASS: BNO055 pronto, 99,774 Hz di
-acquisizioni complete nella finestra verificata. Tara, reset e ricezione OSC
-non eseguiti in questa prova; dettagli nel rapporto Fase 2.
+Fase 2, **Checkpoint B**: core modulare per Seeed XIAO ESP32C3 + BNO055,
+diagnostica USB JSON Lines e motore OSC configurabile separato dal core.
+Matematica V1.1 invariata, configurazione validata e persistente a due slot.
+Dashboard e Fase 3 non avviate. Sul Checkpoint A sono verificati upload, USB,
+BNO055 ready e 99,774 Hz. Collaudo hardware B PASS dopo correzioni USB/client/
+scheduler: IMU 99,947 Hz, OSC Mac 99,942 pacchetti/s, routing moderato e
+persistenza dopo reboot verificati; configurazione originale ripristinata.
+Nessuna tara fisica. Benchmark di capacità e power-cut NVS ancora NOT RUN.
+Schema, metriche e procedura hardware: [motore OSC](docs/phase2-osc.md).
 
 | Percorso | Contenuto |
 | --- | --- |
@@ -14,7 +16,8 @@ non eseguiti in questa prova; dettagli nel rapporto Fase 2.
 | `firmware/Axio/Axio.ino` | Sketch apribile direttamente con Arduino IDE |
 | `firmware/Axio/hardware_config.h` | Mappa confermata: SDA GPIO6/D4, SCL GPIO7/D5, BNO055 0x29 |
 | `firmware/Axio/src/core/` | Acquisizione, taratura, campioni, diagnostica e scheduler |
-| `firmware/Axio/src/transport/` | Wi-Fi e serializzazione OSC transitori |
+| `firmware/Axio/src/transport/` | Wi-Fi e adattatore UDP/NVS del motore OSC |
+| `firmware/Axio/src/osc/` | Schema, preset, codec, scheduling, routing e journal |
 | `firmware/Axio/src/diagnostics/` | Protocollo seriale limitato, servizio e invio USB senza attese |
 | `tests/fixtures/phase0-Axio.ino` | Copia Fase 0 congelata, controllo byte per byte |
 | `scripts/`, `toolchain.lock.json` | Compilazione e verifica versioni |
@@ -38,8 +41,8 @@ AXIO 1 PING
 ```
 
 Disponibili PING, INFO, STATUS, METRICS, TARE, CONFIG GET e DIAG RESET.
-CONFIG VALIDATE/APPLY verificano solo la sintassi JSON e restituiscono
-`config_engine_unavailable` fino al Checkpoint B. TARE cambia i riferimenti
+CONFIG VALIDATE controlla integralmente lo schema 1 senza applicarlo;
+CONFIG APPLY salva e attiva solo una configurazione valida. TARE cambia i riferimenti
 in RAM; DIAG RESET azzera la finestra diagnostica. Nessun output periodico.
 Protocollo, limiti, memoria e risultati: [verifiche Fase 2](docs/phase2-verification.md).
 
@@ -60,7 +63,7 @@ Senza porta o pyserial: NOT RUN, exit 2. Test falliti: exit 1. Report senza
 sovrascrittura. Wi-Fi/ricevitore richiesti solo per le opzioni dedicate
 `--require-wifi --osc-seconds 10`; configurare prima sul tracker la destinazione
 Mac. `--reset-metrics` modifica esplicitamente i contatori. La persistenza del
-nuovo motore non è ancora implementata.
+nuovo motore è testata su host; ripristino fisico sulla XIAO ancora NOT RUN.
 
 Upload separato e intenzionale, mai richiamato dai test:
 
@@ -78,7 +81,8 @@ Gli script richiedono Arduino CLI, Python 3.9+ e un compilatore C++ per i test
 host. Le versioni Arduino verificate sono bloccate in `toolchain.lock.json`:
 CLI 1.5.1, core `esp32:esp32` 3.3.12, Adafruit BNO055 1.6.4, Unified Sensor
 1.1.15, BusIO 1.17.4, OSC (CNMAT) 4.0.0, WiFiManager 2.0.17. Tutto è risultato
-già installato sulla macchina ispezionata. Nessuna installazione eseguita.
+già installato sulla macchina ispezionata. Nessuna nuova dipendenza firmware;
+pyserial è stato installato nel venv per le prove USB autorizzate.
 WiFi, DNSServer, WiFiClient, WiFiUdp, Preferences e Wire provengono dal core.
 
 Il FQBN **`esp32:esp32:XIAO_ESP32C3`** è stato ricavato dal core installato:
@@ -151,8 +155,7 @@ python3 -B tools/osc_receiver.py --bind 0.0.0.0 --port 16888 --duration 60 --out
 python3 -B tools/analyze_capture.py captures/baseline-01.jsonl
 ```
 
-La cattura non sovrascrive un file esistente. Durata 0 attende Ctrl-C. Configurare
-nel portale storico l'IP LAN del Mac e porta 16888; il default `0.0.0.0` non è
+La cattura non sovrascrive un file esistente. Durata 0 attende Ctrl-C. Per il firmware B usare CONFIG APPLY con IP LAN del Mac e porta 16888; il default `0.0.0.0` non è
 una destinazione operativa da assumere valida. L'AP storico si chiama
 `Tracker_<id>` e viene richiesto senza password; il futuro AP protetto non è
 ancora implementato. Il ricevitore può richiedere consenso al firewall macOS.
@@ -163,7 +166,7 @@ timetag dei bundle sono conservati, senza pianificare la consegna. Supportati
 `i f s b h d T F N I`; altri tag e pacchetti malformati vengono registrati come
 errore con payload base64. Non è un'implementazione completa di OSC.
 
-Per inviare la taratura storica, sostituire l'IP della XIAO; il comando modifica
+Con il default `/tare`, per inviare la taratura sostituire l'IP della XIAO; il comando modifica
 quaternion di riferimento e yaw nella RAM del dispositivo:
 
 ```sh

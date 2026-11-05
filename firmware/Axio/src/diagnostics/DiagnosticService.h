@@ -1,10 +1,11 @@
 #pragma once
 #include "SerialProtocol.h"
+#include <math.h>
 #include "../core/TrackerState.h"
 
 namespace axio {
 struct RuntimeStatus {
-  bool wifi=false;
+  bool wifi=false, engine=false;
   uint32_t heap=0, minHeap=0;
   int deviceId=0;
   unsigned outPort=0, listenPort=0;
@@ -15,36 +16,53 @@ template<class Platform> class DiagnosticService {
   TrackerState &tracker;
   Platform &platform;
   uint64_t epochUs=0;
+  char data[5000]={};
+  template<class P> static auto config(P &p,const char *id,char *cmd,char *out,int)
+      -> decltype(p.configCommand(id,cmd,out),bool()) {return p.configCommand(id,cmd,out);}
+  template<class P> static bool config(P &,const char *,char *,char *,long) {return false;}
+  template<class P> static auto reset(P &p,int) -> decltype(p.resetMetrics(),void()) {p.resetMetrics();}
+  template<class P> static void reset(P &,long) {}
+  template<class P> static auto metrics(P &p,char *out,size_t cap,int) -> decltype(p.metricsJson(out,cap),void()) {p.metricsJson(out,cap);}
+  template<class P> static void metrics(P &,char *out,size_t,long) {strcpy(out,"null");}
  public:
   DiagnosticService(TrackerState &t, Platform &p):tracker(t),platform(p) {}
   void execute(const char *id, char *command, char *out) {
+    if(config(platform,id,command,out,0))return;
     const char *error=nullptr;
-    char data[1600]={};
+    data[0]=0;
     auto &d=tracker.diagnostics;
     uint64_t now=platform.nowUs();
     if (!strcmp(command,"PING")) strcpy(data,"{\"pong\":true}");
     else if (!strcmp(command,"INFO")) snprintf(data,sizeof(data),
-      "{\"firmware\":\"Axio\",\"version\":\"2.0.0-checkpoint-a\",\"protocol\":1,\"board\":\"XIAO_ESP32C3\",\"build\":\"%s %s\",\"cdc_on_boot\":true,\"config_engine\":false}",__DATE__,__TIME__);
+      "{\"firmware\":\"Axio\",\"version\":\"2.0.0-checkpoint-b\",\"protocol\":1,\"board\":\"XIAO_ESP32C3\",\"build\":\"%s %s\",\"cdc_on_boot\":true,\"config_engine\":%s}",__DATE__,__TIME__,platform.status().engine?"true":"false");
     else if (!strcmp(command,"STATUS")) {
       RuntimeStatus s=platform.status();
       const char *states[]={"uninitialized","ready","init_failed","read_error"};
-      snprintf(data,sizeof(data),"{\"imu\":\"%s\",\"sample_valid\":%s,\"sequence\":%llu,\"sample_timestamp_us\":%llu,\"wifi_connected\":%s,\"osc\":\"transitional\",\"heap_free\":%u,\"heap_min\":%u,\"uptime_us\":%llu}",
+      snprintf(data,sizeof(data),"{\"imu\":\"%s\",\"sample_valid\":%s,\"sequence\":%llu,\"sample_timestamp_us\":%llu,\"wifi_connected\":%s,\"osc\":\"%s\",\"heap_free\":%u,\"heap_min\":%u,\"uptime_us\":%llu}",
         states[unsigned(tracker.sensor)],tracker.latest.valid?"true":"false",
         (unsigned long long)tracker.latest.sequence,(unsigned long long)tracker.latest.timestampUs,
-        s.wifi?"true":"false",unsigned(s.heap),unsigned(s.minHeap),(unsigned long long)now);
+        s.wifi?"true":"false",s.engine?"configurable":"transitional",unsigned(s.heap),unsigned(s.minHeap),(unsigned long long)now);
     } else if (!strcmp(command,"METRICS")) {
       double seconds=double(now-epochUs)/1e6;
-      snprintf(data,sizeof(data),"{\"window_us\":%llu,\"acquisition_attempts\":%llu,\"acquired\":%llu,\"snapshots\":%llu,\"read_errors\":%llu,\"init_errors\":%llu,\"tare_requests\":%llu,\"tare_errors\":%llu,\"osc_attempts\":%llu,\"acquisition_hz\":%.6f,\"snapshot_hz\":%.6f,\"osc_attempt_hz\":%.6f,\"osc_requested_hz\":100,\"udp_sent\":null,\"host_received\":null,\"max_read_us\":%llu,\"max_processing_us\":%llu,\"max_send_us\":%llu,\"last_interval_us\":%llu,\"max_interval_us\":%llu}",
+      snprintf(data,sizeof(data),"{\"window_us\":%llu,\"acquisition_attempts\":%llu,\"acquired\":%llu,\"snapshots\":%llu,\"read_errors\":%llu,\"init_errors\":%llu,\"tare_requests\":%llu,\"tare_errors\":%llu,\"osc_attempts\":%llu,\"acquisition_hz\":%.6f,\"snapshot_hz\":%.6f,\"osc_attempt_hz\":%.6f,\"osc_requested_hz\":%s,\"udp_sent\":null,\"host_received\":null,\"max_read_us\":%llu,\"max_processing_us\":%llu,\"max_send_us\":%llu,\"last_interval_us\":%llu,\"max_interval_us\":%llu,\"interval_mean_us\":%.3f,\"interval_stddev_us\":%.3f}",
         (unsigned long long)(now-epochUs),(unsigned long long)d.attempts,(unsigned long long)d.acquired,
         (unsigned long long)d.acquired,(unsigned long long)d.readErrors,(unsigned long long)d.initErrors,
         (unsigned long long)d.tareRequests,(unsigned long long)d.tareErrors,(unsigned long long)d.sendAttempts,
         seconds>0?d.acquired/seconds:0,seconds>0?d.acquired/seconds:0,seconds>0?d.sendAttempts/seconds:0,
-        (unsigned long long)d.maxReadUs,(unsigned long long)d.maxProcessUs,(unsigned long long)d.maxSendUs,
-        (unsigned long long)d.lastIntervalUs,(unsigned long long)d.maxIntervalUs);
+        platform.status().engine?"null":"100",(unsigned long long)d.maxReadUs,(unsigned long long)d.maxProcessUs,(unsigned long long)d.maxSendUs,
+        (unsigned long long)d.lastIntervalUs,(unsigned long long)d.maxIntervalUs,d.intervalMeanUs,d.attempts>1?sqrt(d.intervalM2Us/double(d.attempts-1)):0);
+      if(platform.status().engine) {
+        size_t n=strlen(data);
+        strcpy(data+n-1,",\"engine\":");
+        size_t offset=strlen(data);
+        metrics(platform,data+offset,sizeof(data)-offset-1,0);
+        strcat(data,"}");
+      }
     } else if (!strcmp(command,"TARE")) {
       if (!platform.tare()) error="imu_unavailable";
       else strcpy(data,"{\"tared\":true,\"persistent\":false}");
     } else if (!strcmp(command,"DIAG RESET")) {
+      reset(platform,0);
       // Reset measurement window only. Keep initialization history and lifetime sequence.
       uint64_t initErrors=d.initErrors;
       d=Diagnostics(); d.initErrors=initErrors; epochUs=now;

@@ -1,4 +1,4 @@
-# Moduli Fase 2 — Checkpoint A
+# Moduli Fase 2 — Checkpoint B
 
 Arduino compila ricorsivamente questa cartella. `../Axio.ino` coordina:
 
@@ -25,5 +25,7 @@ sequenza. `latest.valid` significa che esiste un ultimo campione valido; lo stat
 Sequenza e timestamp non avanzano in caso di errore. I campioni falliti non sono
 inviati. Non confondere l'assenza di errori I²C con qualità della fusione.
 
-Metriche e limiti: `../../../docs/phase2-verification.md`. Il nuovo motore OSC
-attende conferma al Checkpoint A; NetworkManager e dashboard non implementati.
+Metriche e limiti: `../../../docs/phase2-verification.md` e
+`../../../docs/phase2-osc.md`. `osc/` contiene schema, codec, engine e journal;
+`transport/OscRuntime.*` collega UDP e NVS. Il loop non usa più il serializer
+storico, conservato per regressione. NetworkManager e dashboard non implementati.

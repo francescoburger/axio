@@ -9,6 +9,8 @@ template<class Service> class UsbDiagnostics {
   char output[SerialProtocol::MaxReply]={};
   size_t pending=0, offset=0;
  public:
+  // HWCDC otherwise defaults to 256 bytes and drops bursts during I2C work.
+  static constexpr size_t RxCapacity=SerialProtocol::MaxLine+1;
   explicit UsbDiagnostics(Service &s):service(s) {}
   template<class Port> void poll(Port &port, uint32_t now) {
     if (pending) {
