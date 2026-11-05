@@ -1,0 +1,11 @@
+{
+  "arduino_cli": "1.5.1",
+  "core": {"esp32:esp32": "3.3.12"},
+  "libraries": {
+    "Adafruit BNO055": "1.6.4",
+    "Adafruit BusIO": "1.17.4",
+    "Adafruit Unified Sensor": "1.1.15",
+    "OSC": "4.0.0",
+    "WiFiManager": "2.0.17"
+  }
+}

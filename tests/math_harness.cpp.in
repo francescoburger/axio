@@ -1,0 +1,66 @@
+#include <cstdio>
+#include <iostream>
+#include <iomanip>
+#include <string>
+#include <vector>
+#include <utility/imumaths.h>
+
+// Solo adattatori hardware/trasporto; la matematica viene estratta dallo sketch.
+struct Adafruit_BNO055 {
+  enum { VECTOR_EULER, VECTOR_LINEARACCEL, VECTOR_GYROSCOPE };
+  imu::Quaternion quat;
+  imu::Vector<3> vectors[3];
+  int reads = 0;
+  imu::Quaternion getQuat() { ++reads; return quat; }
+  imu::Vector<3> getVector(int kind) { ++reads; return vectors[kind]; }
+} bno;
+struct OSCMessage {};
+struct BundleEntry { std::string address; std::vector<float> values; };
+struct OSCBundle {
+  std::vector<BundleEntry> entries;
+  OSCBundle& add(const char* address) { entries.push_back({address, {}}); return *this; }
+  OSCBundle& add(float value) { entries.back().values.push_back(value); return *this; }
+  void send(int) {
+    const char* expected[] = {"/ypr7", "/real7", "/world7", "/gyro7"};
+    if (entries.size() != 4) std::exit(3);
+    for (int i=0; i<4; ++i)
+      if (entries[i].address != expected[i] || entries[i].values.size() != 3) std::exit(3);
+  }
+  void empty() {}
+};
+struct FakeUDP {
+  int packets=0;
+  void beginPacket(int, unsigned int) { ++packets; }
+  void endPacket() {}
+  operator int() const { return 0; }
+} UDP;
+int outIp=0, DEVICE_ID=7;
+unsigned int outPort=16888;
+
+/*__GLOBALS__*/
+/*__FUNCTIONS__*/
+
+int main() {
+  imuok = false;
+  bno_loop();
+  if (bno.reads || UDP.packets) return 4;
+  double v[20];
+  std::cout << std::setprecision(17);
+  while (std::cin >> v[0]) {
+    for (int i=1; i<20; ++i) if (!(std::cin >> v[i])) return 2;
+    bno.quat = imu::Quaternion(v[0],v[1],v[2],v[3]);
+    bno.vectors[0] = imu::Vector<3>(v[4],v[5],v[6]);
+    OSCMessage msg;
+    osctare(msg);
+    bno.quat = imu::Quaternion(v[7],v[8],v[9],v[10]);
+    for (int k=0; k<3; ++k)
+      bno.vectors[k] = imu::Vector<3>(v[11+3*k],v[12+3*k],v[13+3*k]);
+    imuok = true;
+    bno_loop();
+    double result[] = {quatOffset.w(),quatOffset.x(),quatOffset.y(),quatOffset.z(),
+      double(yawOffset),q0,q1,q2,q3,yaw,pitch,roll,
+      axReal,ayReal,azReal,axWorld,ayWorld,azWorld,gx,gy,gz};
+    for (double value:result) std::cout << value << ' ';
+    std::cout << '\n';
+  }
+}
