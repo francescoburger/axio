@@ -64,9 +64,12 @@ class BaselineTests(unittest.TestCase):
         original = (ROOT/'reference/HandTrackerV1_1.ino').read_bytes()
         self.assertEqual(hashlib.sha256(original).hexdigest(), SHA256)
         expected = original.replace(b'#define SDA_PIN 5\n#define SCL_PIN 6', b'#include "hardware_config.h"')
-        self.assertEqual((ROOT/'firmware/Axio/Axio.ino').read_bytes(), expected)
+        # Freeze the Phase 0 byte check while testing the refactored core below.
+        self.assertEqual((ROOT/'tests/fixtures/phase0-Axio.ino').read_bytes(), expected)
         header = (ROOT/'firmware/Axio/hardware_config.h').read_text()
-        self.assertIn('#define SDA_PIN 5\n#define SCL_PIN 6', header)
+        self.assertRegex(header, r'(?m)^#define SDA_PIN 6(?:\s|$)')
+        self.assertRegex(header, r'(?m)^#define SCL_PIN 7(?:\s|$)')
+        self.assertRegex(header, r'(?m)^#define BNO055_I2C_ADDRESS 0x29(?:\s|$)')
 
     def test_original_cpp_against_reference(self):
         compiler = shutil.which(os.environ.get('CXX', 'c++'))
@@ -101,16 +104,25 @@ class BaselineTests(unittest.TestCase):
                 norm = math.sqrt(sum(t*t for t in q))
                 return [t/norm for t in q]
             cases.append(case(tare=rng.uniform(0,360),yaw=rng.uniform(0,360),pitch=rng.uniform(-180,180),roll=rng.uniform(-90,90),origin=quaternion(),quat=quaternion(),acc=[rng.uniform(-80,80) for _ in range(3)],gyro=[rng.uniform(-2000,2000) for _ in range(3)]))
-        run = subprocess.run([str(build/'baseline')], input='\n'.join(' '.join(map(repr,v)) for v in cases)+'\n', text=True, capture_output=True, check=True)
-        rows = run.stdout.splitlines()
-        self.assertEqual(len(rows), len(cases))
-        for i, (row, case_) in enumerate(zip(rows, cases)):
-            actual = list(map(float, row.split()))
-            expected = reference(case_)
-            self.assertEqual(len(actual), len(expected))
-            for column, (a,b) in enumerate(zip(actual,expected)):
-                self.assertAlmostEqual(a,b,delta=max(1e-7, abs(b)*2e-6),msg=f'case {i}, column {column}')
-        print(f'PASS: {len(cases)} vettori confrontati con C++ originale e imumaths installata')
+        subprocess.run([compiler,'-std=c++11','-O0','-ffp-contract=off','-I',str(library),
+                        '-I',str(ROOT/'firmware/Axio'),str(ROOT/'tests/core_math_harness.cpp'),
+                        '-o',str(build/'core_math')], check=True, capture_output=True, text=True)
+        baseline_rows = None
+        for executable in ('baseline', 'core_math'):
+            run = subprocess.run([str(build/executable)], input='\n'.join(' '.join(map(repr,v)) for v in cases)+'\n', text=True, capture_output=True, check=True)
+            rows = run.stdout.splitlines()
+            self.assertEqual(len(rows), len(cases))
+            if baseline_rows is None:
+                baseline_rows = rows
+            else:
+                self.assertEqual(rows, baseline_rows, 'core vs baseline: exact host output')
+            for i, (row, case_) in enumerate(zip(rows, cases)):
+                actual = list(map(float, row.split()))
+                expected = reference(case_)
+                self.assertEqual(len(actual), len(expected))
+                for column, (a,b) in enumerate(zip(actual,expected)):
+                    self.assertAlmostEqual(a,b,delta=max(1e-7, abs(b)*2e-6),msg=f'case {i}, column {column}')
+        print(f'PASS: {len(cases)} vettori, baseline/core vs oracolo; output host baseline/core identico')
 
     def test_known_edges(self):
         base = [1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0]

@@ -2,8 +2,8 @@
 
 - Progetto Axio, repository axio; Seeed XIAO ESP32C3 e BNO055, macOS,
   Arduino IDE e CLI. Sketch principale: `firmware/Axio/Axio.ino`.
-- Fase corrente: **0**. Non iniziare Fase 1, firmware 2.0, dashboard o nuovo
-  motore OSC senza una nuova richiesta esplicita.
+- Fase corrente: **1**, modularizzazione autorizzata. Non iniziare Fase 2,
+  dashboard, nuovo motore OSC o altre funzionalità senza richiesta esplicita.
 - `reference/HandTrackerV1_1.ino` è immutabile: niente rinomina, correzioni,
   formattazione o sostituzione. Hash atteso in `tests/test_baseline.py` e
   `docs/baseline-v1.1.md`. Anche i difetti storici vanno documentati, non corretti.
@@ -11,11 +11,18 @@
   prodotti, cast verso zero, resto C++, precisione e ordine delle operazioni.
   Non sostituire con inverse, normalizzazioni, clamp o conversioni diverse.
 - Centralizzare tutti i pin tramite `#define` in
-  `firmware/Axio/hardware_config.h`. GPIO provvisori, verifica fisica utente.
-- In Fase 0 la copia differisce dalla baseline soltanto per l'inclusione di
-  quel file al posto delle due definizioni dei pin. Il test controlla i byte.
-- Mantenere compatibilità Arduino IDE: cartella e sketch omonimi. `src/`
-  contiene ora solo indicazioni, nessuna implementazione futura.
+  `firmware/Axio/hardware_config.h`. Cablaggio confermato: SDA GPIO6/D4,
+  SCL GPIO7/D5; indirizzo BNO055 0x29 nello stesso file. L'I²C usa i define.
+- La copia Fase 0 è congelata in `tests/fixtures/phase0-Axio.ino`: differisce
+  dalla baseline solo per l'include hardware. Preservare il controllo byte e
+  tutti i vettori/test storici, oltre ai test del core di produzione.
+- Mantenere compatibilità Arduino IDE: cartella e sketch omonimi; moduli in
+  `src/core/` e `src/transport/`. Il trasporto serializza il campione senza I²C.
+- Riferimenti iniziali identità/yaw zero, nessuna tara automatica. Unico ingresso
+  comandi `ImuManager::calibrateReference()`. Pubblicare solo letture complete;
+  in errore conservare ultimo valido e stato esplicito. Nessun retry init nuovo.
+- Scheduler 10 ms senza catch-up, `millis()` unsigned e timestamp monotono 64 bit.
+  Nessuna equivalenza temporale o prestazione dichiarata senza hardware.
 - Lavorare nel repository; niente installazioni, modifiche esterne o azioni
   distruttive senza approvazione. Niente pubblicazione o push remoto.
 - Evitare dipendenze inutili. Script, build, cache e test generano file in

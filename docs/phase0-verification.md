@@ -113,3 +113,10 @@ protocollo benchmark sono pronti. Restano da acquisire le evidenze hardware.
 `src/` documenta i futuri confini dei moduli senza implementarli. I requisiti
 futuri sono in AGENTS.md; nessuna scelta di limite OSC o compatibilità Legacy
 è stata imposta. La Fase 1 richiede una nuova autorizzazione dell'utente.
+
+## Aggiornamento hardware successivo alla Fase 0
+
+L'utente ha confermato SDA GPIO6 (D4), SCL GPIO7 (D5), BNO055 0x29.
+La configurazione corrente è in `firmware/Axio/hardware_config.h`; i valori
+5/6 riportati sopra descrivono soltanto la baseline storica, che resta immutata.
+La conferma del cablaggio non sostituisce le prove funzionali hardware NOT RUN.

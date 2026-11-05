@@ -24,7 +24,7 @@ contatore di letture. Il timetag immediato OSC non sostituisce questi dati.
 
 ## Preparazione sulla XIAO (tutto NOT RUN)
 
-1. Verificare alimentazione, massa comune, livelli I²C del breakout, GPIO 5/6,
+1. Verificare alimentazione, massa comune, livelli I²C del breakout, GPIO SDA 6/D4 e SCL 7/D5 (cablaggio confermato),
    indirizzo 0x29, cristallo esterno e orientamento P0. Non dedurre GPIO dalle
    etichette Dn. Registrare modello/revisione del breakout e collegamenti.
 2. Compilare con la toolchain bloccata; registrare hash sorgenti, versioni,
@@ -107,3 +107,13 @@ Per ogni prova futura riportare PASS/FAIL/NOT RUN, durata e condizioni, file di
 cattura, dati grezzi, definizione delle metriche, statistiche e limiti osservativi.
 Il PASS di un test funzionale non equivale al raggiungimento di un obiettivo
 prestazionale ancora da definire.
+
+## Strumentazione introdotta in Fase 1
+
+La baseline V1.1 e i suoi limiti sopra rimangono invariati. Axio modulare ora
+mantiene timestamp monotoni a 64 bit, sequenza dei campioni e contatori/tempi in
+`tracker.diagnostics`, senza modificare il protocollo OSC. Le letture vengono
+raggruppate prima dei calcoli: non si assume equivalenza temporale con V1.1.
+Campi, modalità di osservazione, overhead e prove ancora NOT RUN sono descritti
+in [phase1-verification.md](phase1-verification.md). Nessuna di queste metriche
+misura automaticamente la frequenza interna di fusione del BNO055.

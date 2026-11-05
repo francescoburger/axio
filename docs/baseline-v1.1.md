@@ -207,3 +207,10 @@ non commutativi/non unitari, accelerazioni oltre scala, gyro sotto un grado/s,
 250 campioni casuali con seed fisso. Confronto con tolleranza assoluta 1e-7 o
 relativa 2e-6 per differenze host/target; non è una prova bit per bit ESP32 né
 un test fisico. La fedeltà testuale della copia è verificata separatamente.
+
+## Aggiornamento hardware successivo alla Fase 0
+
+L'utente ha confermato SDA GPIO6 (D4), SCL GPIO7 (D5), BNO055 0x29.
+La configurazione corrente è in `firmware/Axio/hardware_config.h`; i valori
+5/6 riportati sopra descrivono soltanto la baseline storica, che resta immutata.
+La conferma del cablaggio non sostituisce le prove funzionali hardware NOT RUN.

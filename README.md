@@ -1,15 +1,18 @@
 # Axio
 
-Fase 0: base tecnica del firmware Seeed XIAO ESP32C3 + BNO055, Wi-Fi e OSC UDP.
-La copia di lavoro conserva il comportamento storico V1.1. La Fase 2.0, la
-dashboard e il nuovo motore OSC non sono implementati.
+Fase 1: core modulare per Seeed XIAO ESP32C3 + BNO055, Wi-Fi e OSC UDP.
+Matematica V1.1 e protocollo OSC transitorio conservati; letture I²C fallite
+non vengono pubblicate. La Fase 2, la dashboard e il nuovo motore OSC non
+sono implementati. Verifiche hardware ancora NOT RUN.
 
 | Percorso | Contenuto |
 | --- | --- |
 | `reference/HandTrackerV1_1.ino` | Baseline storica immutabile |
 | `firmware/Axio/Axio.ino` | Sketch apribile direttamente con Arduino IDE |
-| `firmware/Axio/hardware_config.h` | Definizioni GPIO provvisorie 5/6 |
-| `firmware/Axio/src/README.md` | Spazio documentato per i moduli futuri |
+| `firmware/Axio/hardware_config.h` | Mappa confermata: SDA GPIO6/D4, SCL GPIO7/D5, BNO055 0x29 |
+| `firmware/Axio/src/core/` | Acquisizione, taratura, campioni, diagnostica e scheduler |
+| `firmware/Axio/src/transport/` | Wi-Fi e serializzazione OSC transitori |
+| `tests/fixtures/phase0-Axio.ino` | Copia Fase 0 congelata, controllo byte per byte |
 | `scripts/`, `toolchain.lock.json` | Compilazione e verifica versioni |
 | `tests/` | Regressione matematica e strumenti OSC senza hardware |
 | `tools/` | Ricevitore UDP OSC e analisi delle catture |
@@ -71,8 +74,12 @@ solo dopo approvazione. Arduino IDE deve usare le stesse versioni e la scheda
 XIAO_ESP32C3; aprire `firmware/Axio/Axio.ino`. Verificare con Compila prima di
 qualsiasi upload autorizzato e scegliere manualmente la porta USB corretta.
 
-I test estraggono le funzioni originali e usano gli header `imumaths` della
-libreria installata, senza simulare un risultato hardware. La posizione
+I test estraggono le funzioni originali e compilano anche il core di produzione,
+usando gli header `imumaths` della libreria installata. I 1.345 vettori storici
+restano invariati: baseline e core sono confrontati con l'oracolo Python e fra
+loro. Mock minimi verificano errori I²C, conversioni dei registri, campioni,
+tara, sequenze, rollover e serializzazione OSC. Nessun risultato hardware è
+simulato come misura reale. La posizione
 predefinita è `~/Documents/Arduino/libraries/Adafruit_BNO055`. Per un profilo
 diverso:
 
@@ -121,5 +128,11 @@ PY
 
 Analisi esatta e rischi: [docs/baseline-v1.1.md](docs/baseline-v1.1.md).
 Procedura e limiti delle misure: [docs/benchmarks.md](docs/benchmarks.md).
-Risultati reali: [docs/phase0-verification.md](docs/phase0-verification.md).
-La verifica del cablaggio e tutti i test sulla XIAO rimangono a carico dell'utente.
+Rapporto storico: [docs/phase0-verification.md](docs/phase0-verification.md).
+Architettura, memoria, differenze e verifiche correnti:
+[docs/phase1-verification.md](docs/phase1-verification.md).
+Cablaggio confermato dall'utente: **SDA GPIO6 (D4)**, **SCL GPIO7 (D5)**,
+BNO055 **0x29**. Pin e indirizzo sono modificabili in `hardware_config.h`;
+l'inizializzazione usa `Wire.begin(SDA_PIN, SCL_PIN)`. I test sulla XIAO non
+eseguiti restano NOT RUN; la conferma del cablaggio non costituisce una misura
+di funzionamento o prestazioni.
