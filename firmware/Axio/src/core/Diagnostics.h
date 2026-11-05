@@ -6,6 +6,7 @@ struct Diagnostics {
   uint64_t tareRequests=0, tareErrors=0, sendAttempts=0;
   uint64_t lastReadUs=0, maxReadUs=0, lastSendUs=0, maxSendUs=0;
   uint64_t lastStartUs=0, lastIntervalUs=0, maxIntervalUs=0;
+  uint64_t lastProcessUs=0, maxProcessUs=0;
   void beginRead(uint64_t now) {
     if (attempts) {
       lastIntervalUs = now - lastStartUs;

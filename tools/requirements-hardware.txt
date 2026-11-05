@@ -1,0 +1,2 @@
+# Solo per USB hardware_test.py; i test host non richiedono pacchetti Python.
+pyserial==3.5

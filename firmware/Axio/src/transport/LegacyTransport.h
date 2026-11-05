@@ -1,5 +1,7 @@
 #pragma once
 #include "../core/Sample.h"
+#include "../diagnostics/DiagnosticService.h"
+axio::RuntimeStatus legacyRuntimeStatus();
 void setupLegacyTransport(void (*tare)());
 void processLegacyPortal();
 void checkIncomingOSC();

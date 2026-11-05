@@ -1,4 +1,4 @@
-# Moduli Fase 1
+# Moduli Fase 2 — Checkpoint A
 
 Arduino compila ricorsivamente questa cartella. `../Axio.ino` coordina:
 
@@ -14,6 +14,10 @@ Arduino compila ricorsivamente questa cartella. `../Axio.ino` coordina:
 - `core/Scheduler.h`: periodo storico 10 ms, senza catch-up, rollover unsigned.
 - `transport/LegacyTransport.*`: preferenze, portale Wi-Fi e OSC storici;
   trasmette soltanto il campione passato, senza acquisire sensori.
+- `diagnostics/SerialProtocol.h`: framing ASCII, ID, timeout e sintassi JSON limitata.
+- `diagnostics/DiagnosticService.h`: risposte JSONL, stato, metriche e tara comune.
+- `diagnostics/UsbDiagnostics.h`: poll USB con buffer fissi e budget RX/TX;
+  nessuna stampa periodica, attesa o comando di rete.
 
 Il campione è completo ma non atomico: i quattro blocchi BNO055 sono letti in
 sequenza. `latest.valid` significa che esiste un ultimo campione valido; lo stato
@@ -21,5 +25,5 @@ sequenza. `latest.valid` significa che esiste un ultimo campione valido; lo stat
 Sequenza e timestamp non avanzano in caso di errore. I campioni falliti non sono
 inviati. Non confondere l'assenza di errori I²C con qualità della fusione.
 
-Metriche e limiti: `../../../docs/phase1-verification.md`. Nessuna Fase 2,
-nuovo motore OSC, NetworkManager o dashboard implementati qui.
+Metriche e limiti: `../../../docs/phase2-verification.md`. Il nuovo motore OSC
+attende conferma al Checkpoint A; NetworkManager e dashboard non implementati.

@@ -23,9 +23,9 @@ class BnoDevice {
  public:
   bool begin() {
     Wire.begin(SDA_PIN, SCL_PIN);
-    Serial.println("Initializing BNO055...");
+    Serial.println("# Initializing BNO055...");
     if (!bno.begin()) {
-      Serial.print("BNO055 not detected! Check wiring or I2C address.");
+      Serial.println("# BNO055 not detected! Check wiring or I2C address.");
       return false;
     }
     delay(1000);
@@ -34,7 +34,7 @@ class BnoDevice {
     bno.setExtCrystalUse(true);
     // begin(false) initializes the BusIO handle without an extra probe.
     bus.begin(false);
-    Serial.println("BNO055 initialized successfully.");
+    Serial.println("# BNO055 initialized successfully.");
     return true;
   }
   bool readQuaternion(imu::Quaternion &result) {

@@ -110,6 +110,7 @@ void sendLegacySample(const axio::Sample &sample) {
 }
 void setupLegacyTransport(void (*tare)()) {
   tareCallback = tare;
+  wm.setDebugOutput(false);
   prefs_setup();
 
   wm.addParameter(&targetIp);
@@ -122,12 +123,20 @@ void setupLegacyTransport(void (*tare)()) {
   char wifiName[16];
   sprintf(wifiName, "Tracker_%d", DEVICE_ID);
   wm.setHostname(wifiName);
-  if (!wm.autoConnect(wifiName)) Serial.println("Failed to connect to WiFi");
+  if (!wm.autoConnect(wifiName)) Serial.println("# Failed to connect to WiFi");
 
   wm.startWebPortal();
 
-  Serial.print("Listening for OSC on local port: ");
+  Serial.print("# Listening for OSC on local port: ");
   Serial.println(localPort);
   UDP.begin(localPort);
 }
 void processLegacyPortal() { wm.process(); }
+axio::RuntimeStatus legacyRuntimeStatus() {
+  axio::RuntimeStatus s;
+  s.wifi=WiFi.status()==WL_CONNECTED;
+  s.heap=ESP.getFreeHeap(); s.minHeap=ESP.getMinFreeHeap();
+  s.deviceId=DEVICE_ID; s.outPort=outPort; s.listenPort=localPort;
+  for (unsigned i=0;i<4;++i) s.ip[i]=outIp[i];
+  return s;
+}

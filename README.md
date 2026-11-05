@@ -1,9 +1,12 @@
 # Axio
 
-Fase 1: core modulare per Seeed XIAO ESP32C3 + BNO055, Wi-Fi e OSC UDP.
-Matematica V1.1 e protocollo OSC transitorio conservati; letture I²C fallite
-non vengono pubblicate. La Fase 2, la dashboard e il nuovo motore OSC non
-sono implementati. Verifiche hardware ancora NOT RUN.
+Fase 2, **Checkpoint A**: core modulare per Seeed XIAO ESP32C3 + BNO055,
+diagnostica USB JSON Lines e test hardware espliciti. Matematica V1.1 e OSC
+transitorio conservati; letture I²C fallite non vengono pubblicate. Il nuovo
+motore OSC attende la conferma al Checkpoint A. Dashboard e Fase 3 non avviate.
+Upload e test USB del nuovo firmware PASS: BNO055 pronto, 99,774 Hz di
+acquisizioni complete nella finestra verificata. Tara, reset e ricezione OSC
+non eseguiti in questa prova; dettagli nel rapporto Fase 2.
 
 | Percorso | Contenuto |
 | --- | --- |
@@ -12,6 +15,7 @@ sono implementati. Verifiche hardware ancora NOT RUN.
 | `firmware/Axio/hardware_config.h` | Mappa confermata: SDA GPIO6/D4, SCL GPIO7/D5, BNO055 0x29 |
 | `firmware/Axio/src/core/` | Acquisizione, taratura, campioni, diagnostica e scheduler |
 | `firmware/Axio/src/transport/` | Wi-Fi e serializzazione OSC transitori |
+| `firmware/Axio/src/diagnostics/` | Protocollo seriale limitato, servizio e invio USB senza attese |
 | `tests/fixtures/phase0-Axio.ino` | Copia Fase 0 congelata, controllo byte per byte |
 | `scripts/`, `toolchain.lock.json` | Compilazione e verifica versioni |
 | `tests/` | Regressione matematica e strumenti OSC senza hardware |
@@ -25,6 +29,50 @@ cd /Users/franc/apps/axio
 bash scripts/compile.sh
 python3 -B -m unittest discover -s tests -v
 ```
+
+La diagnostica accetta `AXIO <id> <comando>` e risponde con JSONL correlato:
+
+```text
+AXIO 1 PING
+{"axio":1,"id":"1","ok":true,"data":{"pong":true}}
+```
+
+Disponibili PING, INFO, STATUS, METRICS, TARE, CONFIG GET e DIAG RESET.
+CONFIG VALIDATE/APPLY verificano solo la sintassi JSON e restituiscono
+`config_engine_unavailable` fino al Checkpoint B. TARE cambia i riferimenti
+in RAM; DIAG RESET azzera la finestra diagnostica. Nessun output periodico.
+Protocollo, limiti, memoria e risultati: [verifiche Fase 2](docs/phase2-verification.md).
+
+I test host non richiedono pacchetti Python. Per USB reale, setup esplicito
+opzionale (non eseguito automaticamente):
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r tools/requirements-hardware.txt
+.venv/bin/python -B tools/hardware_test.py --list-ports
+# Sostituire con la porta verificata; non esegue upload o tara:
+.venv/bin/python -B tools/hardware_test.py --port /dev/cu.usbmodem2101 --metrics-seconds 10 --report captures/phase2-usb.json
+# Solo quando si desidera effettivamente tarare:
+.venv/bin/python -B tools/hardware_test.py --port /dev/cu.usbmodem2101 --tare --report captures/phase2-tare.json
+```
+
+Senza porta o pyserial: NOT RUN, exit 2. Test falliti: exit 1. Report senza
+sovrascrittura. Wi-Fi/ricevitore richiesti solo per le opzioni dedicate
+`--require-wifi --osc-seconds 10`; configurare prima sul tracker la destinazione
+Mac. `--reset-metrics` modifica esplicitamente i contatori. La persistenza del
+nuovo motore non è ancora implementata.
+
+Upload separato e intenzionale, mai richiamato dai test:
+
+```sh
+bash scripts/upload.sh --port /dev/cu.usbmodem2101
+```
+
+Ricompila e carica con FQBN `esp32:esp32:XIAO_ESP32C3`, stesse opzioni della
+build. Su Arduino IDE scegliere **USB CDC On Boot: Enabled**. Nel core 3.3.12
+questa opzione corrisponde a `CDCOnBoot=default`, già nello script; disattivata,
+Serial usa UART0 e la build Axio si interrompe. Dopo upload/reset verificare
+nuovamente la porta e chiudere Serial Monitor prima dei test Python.
 
 Gli script richiedono Arduino CLI, Python 3.9+ e un compilatore C++ per i test
 host. Le versioni Arduino verificate sono bloccate in `toolchain.lock.json`:
@@ -87,7 +135,7 @@ diverso:
 BNO055_LIBRARY='/percorso/Adafruit_BNO055' python3 -B -m unittest discover -s tests -v
 ```
 
-Non servono pacchetti Python: solo standard library. Un virtualenv è facoltativo,
+Per i test host non servono pacchetti Python: solo standard library. Un virtualenv è facoltativo,
 interamente nel repository, e non richiede `pip install`:
 
 ```sh
