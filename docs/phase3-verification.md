@@ -603,3 +603,338 @@ Il collaudo è eseguito con i limiti dichiarati, non un PASS incondizionato di
 ogni requisito 3D. Restano da decidere ripetizione del ciclo AP/outage sul binario
 finale, prova AP con IMU collegata, indagine heap e cattura OSC con finestre
 allineate su un'unica LAN. Attendere approvazione dell'utente; Fase 4 esclusa.
+
+## 3D-Final
+
+**Stato finale: procedura GL/AP e misura OSC diretta TIM eseguite**, con i limiti
+espliciti nel riepilogo conclusivo di questa sezione. Attesa approvazione per
+il commit; Fase 4 non avviata. I paragrafi preliminari e provvisori seguenti
+conservano la cronologia dell'indagine.
+
+Verifica conclusiva richiesta il 6 novembre 2026, successiva al commit
+`06063ae` sul branch `feat/wifi-connectivity`. Working tree pulito all'inizio.
+Nessuna implementazione riavviata, nessuna modifica ai sorgenti firmware.
+Nessun upload, erase, CONFIG APPLY, WIFI SET/DELETE, AP REKEY, TARE o DIAG RESET.
+Nessun commit, merge o push durante questo checkpoint. Le sezioni precedenti
+restano cronologia delle prove, inclusi i risultati intermedi non riusciti.
+
+### Fase A: identità e ricostruzione delle anomalie
+
+**PASS — artefatto locale:** SHA256 di `.build/artifacts/Axio.ino.bin`
+`9a0df9f89cd40a4a600991f444b08a636576631c512a4175267664f5e1009cda`,
+identico al finale 3D. Il binario contiene data `Nov  6 2026` e ora `09:11:39`;
+INFO dei due tracker restituisce versione `3.0.0-checkpoint-3d` e lo stesso build.
+I log `.build/phase3d-fixed-upload-primary.log` e `…secondary.log` documentano
+la verifica hash dopo l'upload precedente. **NOT RUN — confronto byte/SHA della
+flash attualmente in esecuzione:** la diagnostica esistente non espone il digest
+app; non si entra nel bootloader per leggerlo né si carica nuovo firmware.
+Identità/versione/build coincidono, ma non equivalgono a una nuova verifica
+crittografica dell'intera flash.
+
+Analisi locale in `captures/phase3df-history-01.json`, generata dal probe
+`.build/phase3df_history.py` a partire dalle catture precedenti:
+
+| Anomalia storica | Evidenza temporale | Conclusione dimostrata |
+| --- | --- | --- |
+| Heap minimo 31.772 B | Dopo il primo reboot 3C, a uptime 391,530595 s il minimo era 99.852 B; a 1.752,618316 s era 31.772 B, heap libero 112.576 B | Evento compreso in questo intervallo senza osservazioni sufficienti; già precedente alle due finestre outage. Nessuna attribuzione a provisioning, discovery o perdita STA |
+| Massimo intervallo 76.957 µs, max read 74.708 µs | Già presenti al primo snapshot pair a uptime circa 1.752,7 s; massimo invariato durante l'outage successivo | Non causati per la prima volta dall'outage registrato; istante/causa iniziale non disponibili |
+| Massimo finale 78.291 µs | Già presente a window 11,351112 s, poi invariato a 21,377131 s, durante la finestra query 143–183 s e fino al listener a circa 707 s | Picco registrato entro i primi 11,35 s di quel boot; non è dimostrata la specifica chiamata responsabile |
+| 1.248 datagrammi OSC | 08:13:52,412268–08:14:04,412134 UTC, span monotono 11,999723 s; 2.496 messaggi validi, unica sorgente `192.168.1.5:16889` | Conteggio confermato; 101–107 pacchetti per secondo, non soltanto una raffica al bordo della finestra |
+
+Tutti i 1.248 payload decodificati sono identici, compatibili col sensore fermo:
+non costituiscono una prova di duplicazione. I timetag sono immediati (1), non
+timestamp di acquisizione. Senza sequence number né METRICS ai bordi di quella
+vecchia cattura, non è possibile ricostruire quali datagrammi siano nuovi,
+ritardati o duplicati. Nessuna causa NAT assunta automaticamente.
+
+### Procedura USB e autorizzazioni effettive
+
+Il primo tentativo in sandbox non ha avuto accesso alla porta, senza misure
+hardware (`phase3df-initial-01.json`). Il successivo probe autorizzato ha aperto
+le porte con DTR/RTS disattivati, senza comandi reset, ma ha osservato uptime
+1,969 s e 0,982 s: **FAIL procedurale, possibile riavvio involontario dovuto
+all'apertura USB**. Il solo uptime non dimostra la causa elettrica. La procedura
+è stata sospesa e il fatto comunicato immediatamente all'utente.
+
+L'utente ha poi autorizzato espressamente l'eventuale riavvio all'apertura e
+l'uso dell'apertura standard già impiegata in 3D. Con questa apertura gli uptime
+iniziali sono circa 125,759 s e 123,617 s, coerenti con la prosecuzione dello
+stesso boot osservato precedentemente; le porte sono rimaste aperte per tutte
+le successive finestre. Nessun esptool, reset esplicito o baud touch usato.
+Report `phase3df-initial-02.json` e `phase3df-observe-01.json`.
+
+Il Mac inizialmente era su GL, IP `192.168.8.164`; l'utente lo ha riportato
+manualmente su TIM e il probe ha verificato `192.168.1.4`. Configurazione OSC
+letta prima delle misure: destinazione `192.168.1.4:16888`, ID 3, listener 16889,
+bundle con orientation e quaternion a 100 Hz. Mai modificata. Il tracker
+principale resta su GL `192.168.8.159`, quindi la ricezione passa ancora dal NAT
+GL `192.168.1.5` verso TIM; non è una misura sulla stessa LAN.
+
+### Memoria e IMU: osservazione stabile
+
+Due finestre consecutive nominali di 45 s, senza client esterni di prova e
+con discovery autonoma abilitata; STATUS e METRICS circa una volta al secondo.
+Non si può disabilitare discovery per ottenere una finestra completamente priva
+di query senza cambiare il firmware. Durante i 90 s le query passano da 4 a 7;
+osservato anche `query_pending:true`, senza fallimenti discovery.
+
+| Misura | Finestra 1 | Finestra 2 |
+| --- | ---: | ---: |
+| Durata firmware | 45,069388 s | 45,034719 s |
+| Acquisizioni/snapshot | 4.503 | 4.500 |
+| Frequenza | **99,912606 Hz** | **99,922906 Hz** |
+| Read error delta | 0 | 0 |
+| Intervallo medio derivato | circa 10.008,230 µs | circa 10.007,319 µs |
+| Deviazione standard derivata | circa 175,060 µs | circa 190,360 µs |
+| Massimo intervallo cumulativo prima/dopo | 78.722 / 78.722 µs | 78.722 / 78.722 µs |
+| Massimo lettura cumulativo prima/dopo | 15.878 / 15.878 µs | 15.878 / 15.878 µs |
+
+**PASS — acquisizione continua senza errori nella finestra osservata.** Le
+frequenze sono inferiori di circa 0,030 e 0,020 Hz rispetto ai precedenti
+99,942439 Hz; non equivalgono a una regressione dimostrata né a una garanzia
+temporale. Media e deviazione delle singole finestre sono ricostruite per
+differenza dai momenti cumulativi Welford, sapendo che con N tentativi sono
+registrati N−1 intervalli. Sono stime: i valori USB sono arrotondati a 0,001 µs
+e la sottrazione amplifica l'errore. I dati cumulativi originali prima/dopo sono
+conservati nel report, senza DIAG RESET.
+
+**NOT RUN — massimo esatto della singola finestra:** il firmware espone solo
+massimo cumulativo e ultimo intervallo. Il massimo degli ultimi intervalli
+campionati è 10.107 µs, ma non è il massimo di tutte le acquisizioni. Il picco
+cumulativo 78.722 µs era già presente all'avvio delle finestre, quindi non è
+stato localizzato temporalmente né attribuito a una transizione.
+
+**Fenomeno heap basso riprodotto:** nella nuova sessione il principale ha già
+minimo **32.480 B** a uptime 125,759 s; il precedente snapshot a 3,209025 s
+aveva minimo 117.548 B. Il momento è compreso fra queste osservazioni: nessun
+legame causale dimostrato con una specifica query o comando. Nei 90 s stabili
+il libero varia **112.332–113.012 B**, mentre il minimo rimane sempre 32.480 B.
+Nessun ulteriore abbassamento osservato durante le query campionate.
+
+**NOT RUN — largest free block, frammentazione e causa del minimo:** questi
+dati non sono esposti dal firmware esistente. Nessuna strumentazione aggiunta.
+Il recupero dell'heap libero non prova assenza di frammentazione o leak; non
+è stato osservato un errore di allocazione/reset/read error durante le finestre.
+L'indagine causale resta aperta, non risolta dal solo valore cumulativo.
+
+### OSC: nuova cattura correlata attraverso GL/NAT
+
+Ricevitore esistente `tools/osc_receiver.py`, unico bind UDP 16888 senza
+SO_REUSEADDR; controllo preliminare nessun ricevitore concorrente. CONFIG GET
+e METRICS prima della cattura, METRICS dopo la terminazione del processo.
+L'intervallo dei due METRICS contiene l'intera vita del ricevitore.
+
+- Avvio processo: **08:52:36,948211 UTC**; socket pronto **08:52:36,987116 UTC**;
+  processo terminato **08:53:17,003103 UTC**.
+- Primo datagramma **08:52:36,989196 UTC**, ultimo **08:53:16,994203 UTC**.
+- Finestra firmware **40,089353 s**: **4.006 acquisizioni**, 99,926781 Hz,
+  **4.006 tentativi UDP**, **4.006 accettazioni locali**, **0 errori UDP**,
+  nessun errore IMU. Accettazione locale non equivale a consegna.
+- Ricevitore: **4.050 datagrammi**, **8.100 messaggi OSC**, **0 invalidi**,
+  sorgente unica `192.168.1.5:16889`, frequenza arrivi **101,212643 Hz**.
+- Intervallo medio 9,880189 ms, p95 13,252917 ms, massimo 32,031958 ms;
+  jitter (deviazione standard popolazione) **2,263327 ms**.
+
+Evidenze: `captures/phase3df-observe-01.json` e relativa `.jsonl`, orari UTC e
+monotoni salvati ai bordi delle richieste USB e del processo ricevitore.
+
+**PASS — formato/routing/ricezione; FAIL — riconciliazione numerica degli
+arrivi con gli invii nella prova NAT.** L'eccesso di 44 datagrammi rispetto
+alle accettazioni nella finestra più ampia riproduce il fenomeno generale
+della cattura da 1.248. Non è giustificato liquidarlo come semplice differenza
+fra le finestre del ricevitore e dei contatori. Non è ancora dimostrato un
+difetto firmware: possibili duplicazioni/ritardi di rete o altre sorgenti dietro
+NAT non sono distinguibili con questi dati. Non si dichiara zero perdite o zero
+duplicati. Prossima verifica minima proposta: ripetere sulla LAN TIM dopo il
+failover autorizzato, senza cambiare la configurazione OSC. Nessuna correzione
+firmware proposta o applicata senza una causa isolata e nuova approvazione.
+
+### Fallback finale: procedura pronta, autorizzazione in attesa
+
+**NOT RUN sul binario finale al momento di questa sezione.** Procedura
+reversibile preparata in `.build/phase3df-fallback-procedure.md`:
+
+1. Avviare monitor USB dei due dispositivi e annotare config/reti/stato; attendere
+   messaggio «monitor pronto». Solo dopo autorizzazione l'utente spegne GL;
+   **TIM resta accesa**, nessuna rete o password viene cambiata/rimossa.
+2. Osservare failover del principale su TIM e AP/HTTP secondario dopo circa 15 s.
+   Con GL spenta, l'utente collega il Mac a `Axio-ac276e7c3128`, password AP
+   concordata, per DHCP e soli GET `/`, `/status`, `/networks`. Nessun POST.
+3. L'utente riporta manualmente il Mac su TIM, verificare IP `192.168.1.4`;
+   riaccende GL e attende il normale avvio. Verificare STA secondaria, AP/HTTP
+   spenti, servizio discovery ripartito e OSC dal principale. Confrontare
+   configurazioni prima/dopo e ripetere OSC diretto TIM.
+
+Il principale conserva TIM e la connessione riuscita non viene preemptata:
+spegnere solo GL non garantisce AP-only con BNO055. **NOT RUN** questa variante
+finché non sia concordata una procedura RF separata. Non spegnere TIM, non
+cancellare credenziali e non forzare disconnessioni. Al ritorno GL il principale
+può restare su TIM: discovery reciproca fra LAN separate da NAT non è attesa.
+
+### Stato provvisorio dei dispositivi e Git
+
+Ultima lettura di questa sessione: principale IMU ready, sample valido,
+STA GL, AP spento, heap libero/minimo **113.012 / 32.480 B**; secondario
+STA GL, AP spento, discovery con un peer, heap **114.040 / 107.540 B**,
+IMU init_failed atteso perché privo di BNO055. Configurazioni OSC e reti lette
+prima/dopo; nessun comando di modifica inviato. Mac verificato su TIM.
+
+Il 3D-Final non è ancora chiuso: attesa autorizzazione per la procedura fallback,
+confronto OSC diretto TIM e valutazione delle anomalie residue. Nel repository
+si modifica soltanto questo rapporto; script e catture diagnostiche restano
+nelle directory ignorate `.build/` e `captures/`. Nessun commit, merge o push;
+Fase 4 esclusa.
+
+Confronto automatico delle letture prima/dopo: CONFIG GET e WIFI GET identici
+su entrambe le schede, tare_requests 0→0, nessun comando fuori dall'allowlist
+di lettura. **PASS** `git diff --check`. Compilazione e regressioni **NOT RUN
+in 3D-Final**: nessun sorgente firmware/tool/test tracciato modificato; sola
+documentazione, verificata per whitespace. I 72 test precedenti restano un
+risultato storico, non una nuova esecuzione. Indice vuoto; unico file tracciato
+modificato `docs/phase3-verification.md`, HEAD sempre `06063ae`.
+
+### Completamento autorizzato GL/AP e ripristino
+
+L'utente ha autorizzato esplicitamente la procedura documentata. Dopo il
+messaggio esatto «Monitor pronto: puoi spegnere GL», ha confermato lo
+spegnimento. TIM è rimasta accesa. Monitor USB in sola lettura già avviato
+su entrambe le XIAO; nessun comando radio/configurazione o reset esplicito.
+Le aperture standard hanno conservato la continuità degli uptime.
+
+Evidenza `captures/phase3df-fallback-01.json`: monitor dalle **08:58:50,795628**
+alle **09:12:16,347986 UTC**, durata metrica principale **805,454122 s**,
+**80.480 campioni**, **99,918788 Hz**, **0 read error**. Nessuna tara/reset.
+
+| Verifica finale sul binario 3D | Esito | Evidenza effettiva |
+| --- | --- | --- |
+| Stato iniziale | PASS | Entrambe STA GL, AP spenti, build/versione attese, discovery reciproca; CONFIG GET/WIFI GET uguali alla precedente sessione |
+| Failover del principale su TIM | PASS | Perdita STA osservata 08:59:45,664721 UTC; TIM con IP `192.168.1.15` osservata 09:00:00,305435 UTC |
+| IMU durante assenza STA | PASS | 1.359 snapshot in 13,596641 s fra campioni sicuramente offline, read error 0, UDP attempts delta 0, suspended_no_sta +1.359 |
+| Fallback AP secondario | PASS | Perdita osservata 08:59:44,551718 UTC; AP/HTTP attivi 09:00:00,305435 UTC, differenza osservata 15,753662 s; timer firmware 15.000 ms |
+| Password AP concordata e accesso | PASS | Collegamento manuale dell'utente con `12345678`, pagina HTML confermata dall'utente e poi GET automatizzati riusciti; nessun nuovo test chiave errata |
+| DHCP e HTTP in sola lettura | PASS | Probe locale: IP `192.168.4.2`, GET `/`, `/status`, `/networks` tutti HTTP 200 fra 09:09:21,328817 e 09:09:21,389396 UTC; nessun POST |
+| OSC in AP-only secondario | PASS | 660 osservazioni AP attivo: udp_attempts sempre 0, listener false, discovery offline; secondario senza IMU, nessun benchmark sensore deducibile |
+| Ritorno GL e spegnimento AP/HTTP | PASS | Secondario STA `192.168.8.184` osservato 09:11:55,299309 UTC, AP/HTTP spenti, reconnects 1; nessun provisioning o cambio password |
+| Ripartenza discovery | PASS | Secondario starts 1→2, nuova query completata senza errori; principale riparte su TIM. Peer vuoti attesi dopo il passaggio su LAN separate da NAT |
+| mDNS principale su TIM | PASS | Browse/resolve/A reali: `axio-ac276e7e3238.local`, IPv4 `192.168.1.15`, servizio `_axio._udp`, SRV 16889, TXT model/schema/hw |
+| Portale sulla STA principale | PASS | Connessione TCP 80 rifiutata; non dedotto dal solo campo http_active |
+| Configurazioni preservate | PASS | CONFIG GET e WIFI GET identici prima/dopo su entrambe le schede, contatori tara 0; nessuna cancellazione o scrittura NVS comandata |
+| Ripristino Mac/GL | PASS | Utente conferma Mac tornato su TIM e GL riaccesa; IP Mac verificato `192.168.1.4`, secondo nuovamente connesso a GL via USB |
+
+La risoluzione temporale del monitor è circa 1 s più richieste USB: 15,754 s
+è il ritardo fra le prime osservazioni, non una misura radio del timeout esatto.
+La policy sul principale ha raggiunto anch'essa la soglia: contatori AP
+`starts:1`, `stops:1`, `last_fallback_ms:15001`. Questo documenta richiesta di
+avvio accettata e successivo stop; nessun campione STATUS/METRICS ha catturato
+AP attivo sul principale, probabilmente per la breve durata prima della STA.
+**NOT RUN** la misura IMU durante un intervallo AP-only identificato e prolungato
+con BNO055. Non usare i 1.359 campioni offline come prova di rate in AP-only.
+
+Durante il passaggio sono comparsi **413 errori UDP locali cumulativi** sul
+principale, partendo da 0: la crescita è già osservata prima che il driver
+segnali STA assente. Nel segmento sicuramente senza STA gli invii rimangono
+fermi; dopo il failover gli errori non crescono più. Non si promette consegna
+durante la perdita fisica della rete prima della notifica del driver. Questi
+errori sono distinti da suspended_no_sta; non sono presenti nella successiva
+finestra OSC stabile TIM.
+
+I primi tre tentativi HTTP (`phase3df-ap-get-01/02/03.json`) vedono IP TIM,
+si fermano prima di inviare GET e restano **FAIL del probe/ambiente**, non
+fallimenti del portale Axio. La sessione interattiva può interrompersi senza
+Internet e riprendere quando il Mac torna su TIM. Il problema è stato risolto
+avviando **prima** del cambio Wi-Fi un probe locale che attende DHCP e salva
+autonomamente le letture anche offline: `phase3df-ap-get-04.json` è PASS.
+La testimonianza manuale dell'utente sulla pagina HTML è distinta dai log
+automatici successivi. Nessun cambio Wi-Fi o modifica dei profili eseguiti dal
+probe: cambi e ripristino sono stati manuali.
+
+### OSC finale diretto sulla LAN TIM
+
+Ricevitore unico `tools/osc_receiver.py`, stesso routing originale, tracker
+`192.168.1.15:16889` → Mac `192.168.1.4:16888`, **senza NAT GL nel percorso**.
+Monitor precedente terminato e porte USB rilasciate prima della misura.
+Prima del bind, nessun altro ricevitore rilevato su UDP 16888.
+
+Orari UTC registrati in `captures/phase3df-osc-tim-01.json` e `.jsonl`:
+
+- METRICS iniziale: richiesta **09:12:25,168601**, risposta **09:12:25,198464**.
+- Avvio ricevitore **09:12:25,198467**, socket pronto **09:12:25,228439**.
+- Primo datagramma **09:12:25,232462**, ultimo **09:13:05,229259**.
+- Processo terminato **09:13:05,238052**.
+- METRICS finale: richiesta **09:13:05,238106**, risposta **09:13:05,262486**.
+
+| Grandezza | Misura effettiva |
+| --- | ---: |
+| Finestra firmware fra METRICS | **40,069639 s** |
+| Acquisizioni / snapshot | **4.005 / 4.005** |
+| Frequenza IMU | **99,950988 Hz** |
+| Tentativi UDP / accettazioni locali | **4.005 / 4.005** |
+| Errori UDP nella finestra / read error | **0 / 0** |
+| Datagrammi ricevuti / messaggi OSC | **3.999 / 7.998** |
+| Datagrammi invalidi | **0** |
+| Frequenza arrivi dal ricevitore | **99,958311 pacchetti/s** |
+| Intervallo medio / p95 / massimo arrivi | **10,004171 / 12,672167 / 27,699625 ms** |
+| Jitter arrivi, deviazione standard popolazione | **1,639204 ms** |
+| Intervallo IMU medio / deviazione derivati | circa **10.004,955 / 131,836 µs** |
+| Massimo intervallo IMU cumulativo prima/dopo | **78.722 / 78.722 µs** |
+
+**PASS — ricezione/routing/formato e contatori stabili su TIM; eccesso di arrivi
+non riprodotto sul percorso diretto.** La finestra firmware include tutta la
+vita del ricevitore ed è più ampia: la differenza di 6 datagrammi è compatibile
+con i bordi non coincidenti, senza dimostrare quante eventuali perdite o
+duplicazioni vi siano. **NOT RUN/non dimostrato: zero perdite e zero duplicati**.
+Nessun sequence number applicativo né traccia simultanea ai due estremi.
+
+Il confronto con **4.050 ricevuti / 4.006 accettati** su GL/NAT, insieme alla
+precedente cattura da 1.248, suggerisce come **ipotesi** un effetto del percorso
+di rete o di traffico pregresso/sorgenti dietro NAT. Non isola una causa, non
+dimostra un difetto nel router e non giustifica modificare firmware, scheduler
+o schema OSC. **FAIL della riconciliazione NAT resta aperto**. Prossima indagine
+minima, se richiesta: catture di rete simultanee sui due lati, senza cambiare
+OSC o configurazioni persistenti. Non eseguita in questo checkpoint.
+
+### Valutazione conclusiva, memoria e stato Git
+
+Prove funzionali finali GL/AP completate, con ripristino manuale verificato.
+Nessun nuovo difetto firmware bloccante isolato; chiusura della Fase 3 proposta
+**con riserve esplicite**, non come PASS incondizionato di ogni proprietà.
+
+| Riepilogo conclusivo 3D-Final | Esito |
+| --- | --- |
+| Prove GL/AP, failover STA, DHCP, HTTP in sola lettura, ripristino Mac/GL e ripartenza discovery | PASS |
+| Ricezione OSC diretta TIM, formato e routing; zero perdite o duplicati non dimostrati | PASS con il limite indicato |
+| Riconciliazione dei datagrammi OSC attraverso NAT | FAIL ancora aperto; causa non isolata |
+| Analisi causale heap/frammentazione, IMU AP-only prolungata sul principale e altre prove escluse elencate sotto | NOT RUN |
+
+- Principale: IMU ready e campione valido, TIM `192.168.1.15`, AP/HTTP spenti,
+  listener attivo, hostname invariato, heap finale **112.572 / 32.480 B**
+  libero/minimo. Nessun nuovo minimo durante l'intero failover e nessun read
+  error; massimo cumulativo 78.722 µs ancora invariato all'ultima lettura
+  a uptime circa 1.490,741 s. Causa del minimo precedente sempre non isolata.
+- Secondario: senza BNO055, init_failed atteso; GL `192.168.8.184`, AP/HTTP
+  spenti, discovery attiva, heap finale **113.736 / 51.336 B**. Nel monitor
+  il minimo scende da 107.540 a 67.124 B durante AP attivo, poi a 51.336 B
+  ancora durante AP attivo. L'ultimo abbassamento è osservato alle
+  **09:09:54,197477 UTC**, prima del ritorno STA; non viene attribuito a
+  una specifica richiesta HTTP o operazione SDK. Heap libero recuperato;
+  largest block/frammentazione e causa **NOT RUN** su entrambi.
+- Mac verificato su TIM; GL riaccesa dall'utente. Nessun ulteriore cambio rete
+  richiesto. Discovery reciproca dopo ripristino su reti diverse **NOT RUN**
+  e non attesa attraverso NAT; quella iniziale su GL è PASS. Lifecycle/query
+  riavviati e mDNS principale raggiungibile su TIM sono verifiche distinte.
+- Ulteriori **NOT RUN**: certificazione radio/assenza assoluta mDNS sull'AP,
+  IMU AP-only principale, digest flash runtime esatto, massimo IMU esatto delle
+  singole finestre, soak prolungato, tara/ACK fisici, fault/power-cut NVS.
+
+Evidenze aggiuntive: `captures/phase3df-lan-tim-01.json` (Bonjour e TCP STA),
+`captures/phase3df-summary-01.json` (riepilogo), tutti file ignorati da Git.
+I probe locali sono in `.build/phase3df_*.py`; nessun processo di test o
+ricevitore è lasciato attivo al termine. Non sono stati aggiunti segreti STA.
+
+Versione e artefatto invariati: flash **1.096.663 B**, RAM statica **111.988 B**
+restano misure della build finale 3D già verificata, senza ricompilazione né
+nuovo upload. Solo `docs/phase3-verification.md` modificato, indice vuoto,
+branch `feat/wifi-connectivity`, HEAD **`06063ae`**. `git diff --check` PASS;
+build e suite **NOT RUN in questa esecuzione** perché non sono cambiati sorgenti
+tracciati o requisiti di build/test. Nessun commit, merge o push. Fermarsi qui
+e attendere approvazione dell'utente per il commit finale; Fase 4 esclusa.
