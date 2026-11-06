@@ -4,8 +4,30 @@ Implementati STA multi-rete (3A), AP protetto con provisioning minimo (3B),
 hostname hardware/mDNS/discovery (3C). Collaudo XIAO 3D eseguito sui due dispositivi
 autorizzati, con limiti e prove ancora NOT RUN nel
 [rapporto](phase3-verification.md#checkpoint-3d--collaudo-hardware).
-Dashboard (Fase 4) esclusa; stop in attesa di approvazione.
+Fase 3 chiusa con le riserve documentate nel rapporto; dashboard e Fase 4
+richiedono una nuova autorizzazione.
 Le sezioni seguenti conservano la base 3A e le successive estensioni 3B/3C.
+
+## Scenario operativo e decisioni di prodotto
+
+Axio e il ricevitore OSC operano normalmente sulla **stessa LAN**. OSC attraverso
+NAT o reti separate è fuori dallo scenario operativo previsto e non ha requisiti
+prestazionali garantiti. Il FAIL storico di riconciliazione dei datagrammi sul
+percorso NAT resta aperto, ma non blocca l'accettazione della Fase 3 in questo
+ambito. Le misure LAN non dimostrano assenza assoluta di perdite o duplicazioni.
+
+Il fallback AP serve esclusivamente alla configurazione e al recupero della
+connettività, **senza OSC**. Il funzionamento prolungato con AP attivo e IMU
+collegata non costituisce un requisito di accettazione del prodotto; la prova
+prolungata in AP-only resta NOT RUN. Durante la perdita della STA l'acquisizione
+IMU deve continuare secondo il comportamento già implementato, mentre OSC viene
+sospeso; alla STA valida e con AP spento riprende con la configurazione esistente.
+
+I minimi heap transitori restano un rischio da monitorare: la loro causa e la
+frammentazione non sono state determinate. Il recupero dell'heap libero non
+dimostra assenza di leak o frammentazione. Questo rischio dovrà essere seguito
+specialmente con l'introduzione della dashboard nella Fase 4, quando autorizzata.
+Risultati storici e limiti: [3D-Final](phase3-verification.md#3d-final).
 
 ## Separazione e dipendenze
 

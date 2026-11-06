@@ -938,3 +938,32 @@ branch `feat/wifi-connectivity`, HEAD **`06063ae`**. `git diff --check` PASS;
 build e suite **NOT RUN in questa esecuzione** perché non sono cambiati sorgenti
 tracciati o requisiti di build/test. Nessun commit, merge o push. Fermarsi qui
 e attendere approvazione dell'utente per il commit finale; Fase 4 esclusa.
+
+### Decisioni di prodotto e chiusura Fase 3
+
+L'utente ha approvato la chiusura della Fase 3 nel seguente ambito operativo:
+Axio e ricevitore OSC sulla stessa LAN; fallback AP dedicato esclusivamente a
+configurazione e recupero della connettività, senza OSC. Durante la perdita
+STA resta richiesta la continuità IMU secondo il comportamento implementato,
+con OSC sospeso. OSC attraverso NAT o reti separate è fuori scenario e non
+ha requisiti prestazionali garantiti; il funzionamento prolungato AP con IMU
+collegata non è un requisito di accettazione del prodotto.
+
+| Risultato storico conservato | Valutazione per la chiusura |
+| --- | --- |
+| PASS LAN diretta, failover, fallback AP, DHCP/HTTP, ripristino e discovery nei contesti verificati | Requisiti verificati entro i limiti delle prove 3D-Final |
+| PASS ricezione OSC diretta TIM | Nessuna dichiarazione di zero perdite o duplicati |
+| FAIL riconciliazione OSC attraverso NAT | Resta FAIL, causa non isolata; non bloccante perché fuori scenario operativo |
+| NOT RUN IMU prolungata in AP-only | Esclusa dai requisiti prioritari e dall'accettazione del prodotto |
+| Causa dei minimi heap e frammentazione non determinate | Rischio aperto da monitorare, specialmente con la futura dashboard della Fase 4 |
+
+La Fase 3 è quindi **chiusa con queste riserve**: gli esiti storici restano
+invariati e il recupero dell'heap libero non dimostra assenza di leak o
+frammentazione. Le altre prove escluse restano NOT RUN. Dettagli dell'ambito
+in [Scenario operativo e decisioni di prodotto](phase3-connectivity.md#scenario-operativo-e-decisioni-di-prodotto).
+
+Questa chiusura documentale segue il commit autorizzato `7dede57`, successivo
+all'implementazione `06063ae`; i riferimenti Git precedenti descrivono lo stato
+al momento delle rispettive verifiche. Modificati soltanto questo rapporto e
+`docs/phase3-connectivity.md`, senza nuove prove, operazioni sui dispositivi o
+modifiche firmware/configurazioni. La Fase 4 richiede una nuova autorizzazione.
