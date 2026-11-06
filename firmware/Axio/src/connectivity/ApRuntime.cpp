@@ -1,0 +1,100 @@
+#include <Arduino.h>
+#include <WiFi.h>
+#include <Preferences.h>
+#include <esp_wifi.h>
+#include <esp_random.h>
+#include "ApRuntime.h"
+#include "FallbackAp.h"
+#include "ProvisioningHttp.h"
+#include "ProvisioningSocket.h"
+#include "ConnectivityRuntime.h"
+#include "../diagnostics/SerialProtocol.h"
+namespace {
+using namespace axio::connectivity;
+struct SecretStore {
+  Preferences prefs;bool ready=false;
+  void begin(){ready=prefs.begin("axio-ap-v1",false);}
+  bool available(){return ready;}
+  bool exists(){return ready&&prefs.isKey("secret");}
+  size_t read(uint8_t *p,size_t n){return ready&&prefs.getBytesLength("secret")<=n?prefs.getBytes("secret",p,n):0;}
+  bool write(const uint8_t *p,size_t n){return ready&&prefs.putBytes("secret",p,n)==n;}
+} secretStore;
+struct Random {void fill(uint8_t *p,size_t n){esp_fill_random(p,n);}} randomSource;
+ApCredentials<SecretStore> credentials(secretStore);
+struct Service {
+  const char *update(const char *s,const char *p,unsigned priority,bool remove){return updateConnectivityNetwork(s,p,priority,remove);}
+  bool status(char *out,size_t cap){connectivityJson(out,cap);return strlen(out)<cap-1;}
+  bool networks(char *out,size_t cap){return connectivityNetworksJson(out,cap);}
+} service;
+ProvisioningSocket socket;
+ProvisioningHttp<ProvisioningSocket,Service> portal(socket,service);
+char ssid[19]={}; // Axio- plus all six MAC bytes.
+struct Driver {
+  bool armed=false,serving=false;uint32_t lastBind=0;bool triedBind=false;
+  uint64_t portalFailures=0;const char *error=nullptr;
+  bool enabled(){return (WiFi.getMode()&WIFI_AP)!=0;}
+  bool started(){return enabled()&&WiFi.AP.started()&&uint32_t(WiFi.softAPIP())!=0;}
+  bool arm(){
+    armed=false;
+    // Configure while the radio is stopped: never advertise the SDK default/open AP.
+    if(esp_wifi_stop()!=ESP_OK){error="ap_radio_stop_failed";return false;}
+    wifi_config_t c={};memcpy(c.ap.ssid,ssid,strlen(ssid));c.ap.ssid_len=strlen(ssid);
+    memcpy(c.ap.password,credentials.password,strlen(credentials.password));c.ap.authmode=WIFI_AUTH_WPA2_PSK;
+    c.ap.pairwise_cipher=WIFI_CIPHER_TYPE_CCMP;c.ap.max_connection=2;c.ap.channel=1;c.ap.beacon_interval=100;
+    bool configured=esp_wifi_set_mode(WIFI_MODE_APSTA)==ESP_OK&&esp_wifi_set_config(WIFI_IF_AP,&c)==ESP_OK;
+    bool station=esp_wifi_set_mode(WIFI_MODE_STA)==ESP_OK;
+    // Restart only in STA mode, even if secure AP configuration failed.
+    bool restarted=station&&esp_wifi_start()==ESP_OK;
+    armed=configured&&restarted;error=armed?nullptr:"ap_profile_failed";return armed;
+  }
+  bool start(){if(!armed||!credentials.ready)return false;return WiFi.enableAP(true);}
+  bool stop(){closePortal();return WiFi.enableAP(false);}
+  void closePortal(){portal.close();serving=false;triedBind=false;}
+  void pollPortal(uint32_t now){
+    if(!serving&&(!triedBind||uint32_t(now-lastBind)>=1000)){
+      triedBind=true;lastBind=now;
+      // AP uses the core's default 192.168.4.1/24 and DHCP server; never bind ANY.
+      auto ip=WiFi.softAPIP();uint8_t address[4]={ip[0],ip[1],ip[2],ip[3]};
+      char text[16];snprintf(text,sizeof(text),"%u.%u.%u.%u",address[0],address[1],address[2],address[3]);
+      uint8_t entropy[16];char token[33];randomSource.fill(entropy,sizeof(entropy));
+      const char *digits="0123456789abcdef";
+      for(unsigned i=0;i<16;++i){token[2*i]=digits[entropy[i]>>4];token[2*i+1]=digits[entropy[i]&15];}token[32]=0;
+      portal.begin(text,token);serving=socket.open(address);
+      memset(entropy,0,sizeof(entropy));memset(token,0,sizeof(token));
+      if(!serving){++portalFailures;error="ap_http_bind_failed";}
+      else error=nullptr;
+    }
+    if(serving)portal.tick(now);
+  }
+} driver;
+FallbackAp<Driver> fallback(driver);
+}
+void setupApRuntime(){
+  uint8_t mac[6]={};
+  bool identity=esp_wifi_get_mac(WIFI_IF_STA,mac)==ESP_OK;
+  if(identity)snprintf(ssid,sizeof(ssid),"Axio-%02x%02x%02x%02x%02x%02x",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+  secretStore.begin();credentials.begin();
+  fallback.provisioned=identity&&credentials.ready&&driver.arm();
+  if(!identity)driver.error="ap_identity_failed";
+}
+void tickApRuntime(bool sta,uint32_t offlineMs){fallback.tick(sta,offlineMs,uint32_t(millis()));}
+bool apRuntimeCommand(const char *id,char *command,char *out){
+  if(!strcmp(command,"AP CREDENTIALS")){
+    if(!credentials.ready)axio::SerialProtocol::reply(out,id,credentials.error?credentials.error:"ap_credentials_unavailable");
+    else {char response[192];snprintf(response,sizeof(response),"{\"ssid\":\"%s\",\"password\":\"%s\",\"security\":\"WPA2-PSK\",\"setup_url\":\"http://192.168.4.1/\"}",ssid,credentials.password);axio::SerialProtocol::reply(out,id,nullptr,response);}
+    return true;
+  }
+  if(strcmp(command,"AP REKEY"))return false;
+  // Explicit physical-USB recovery only; never invoked by web or normal transitions.
+  driver.closePortal();fallback.provisioned=false;
+  if(driver.enabled()&&!driver.stop()){axio::SerialProtocol::reply(out,id,"ap_stop_failed");return true;}
+  bool saved=credentials.replace();fallback.provisioned=saved&&ssid[0]&&driver.arm();
+  axio::SerialProtocol::reply(out,id,fallback.provisioned?nullptr:(credentials.error?credentials.error:"ap_profile_failed"),"{\"restored\":true,\"persistent\":true}");return true;
+}
+void apRuntimeJson(char *out,size_t cap){
+  auto ip=driver.enabled()?WiFi.softAPIP():IPAddress(0,0,0,0);
+  snprintf(out,cap,"{\"enabled\":%s,\"ready\":%s,\"ssid\":\"%s\",\"ip\":\"%u.%u.%u.%u\",\"http_active\":%s,\"starts\":%llu,\"stops\":%llu,\"failures\":%llu,\"http_failures\":%llu,\"last_fallback_ms\":%u,\"last_transition\":\"%s\",\"error\":\"%s\"}",
+    driver.enabled()?"true":"false",fallback.provisioned?"true":"false",ssid,ip[0],ip[1],ip[2],ip[3],driver.serving?"true":"false",
+    (unsigned long long)fallback.starts,(unsigned long long)fallback.stops,(unsigned long long)fallback.failures,(unsigned long long)driver.portalFailures,
+    unsigned(fallback.lastFallbackMs),fallback.reason,credentials.error?credentials.error:(driver.error?driver.error:""));
+}

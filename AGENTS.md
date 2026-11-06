@@ -3,7 +3,13 @@
 - Progetto Axio, repository axio; Seeed XIAO ESP32C3 e BNO055, macOS,
   Arduino IDE e CLI. Sketch principale: `firmware/Axio/Axio.ino`.
 - Fase **2 completata e approvata** dall'utente, inclusi i Checkpoint A e B.
-  Non iniziare Fase 3, dashboard o altre funzionalità senza nuova richiesta.
+  Checkpoint 3A/3B/3C software completati; autorizzato Checkpoint 3D:
+  upload e collaudo sulla XIAO, integrazione Wi-Fi/AP/mDNS/discovery/OSC.
+  Preservare NVS e reti esistenti; nessuna tara, DIAG RESET o prova distruttiva.
+  Fermarsi al termine di 3D. Non iniziare dashboard o Fase 4 senza approvazione.
+  Nessun commit, merge o push senza approvazione esplicita.
+- Password AP fissa `12345678` richiesta esplicitamente dall'utente;
+  sostituisce il precedente requisito di segreto casuale. WPA2 resta obbligatorio.
 - `reference/HandTrackerV1_1.ino` è immutabile: niente rinomina, correzioni,
   formattazione o sostituzione. Hash atteso in `tests/test_baseline.py` e
   `docs/baseline-v1.1.md`. Anche i difetti storici vanno documentati, non corretti.

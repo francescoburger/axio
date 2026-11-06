@@ -1,9 +1,20 @@
 # Axio
 
-Fase 2, **Checkpoint B**: core modulare per Seeed XIAO ESP32C3 + BNO055,
+Fase 3, **Checkpoint 3D: collaudo eseguito con limiti documentati, in attesa di approvazione**: STA multi-rete, fallback AP WPA2 dopo
+15 secondi e provisioning minimo su AP. Password AP fissa `12345678`,
+richiesta esplicitamente; SSID leggibile con `AP CREDENTIALS` via USB.
+Firmware caricato sui due XIAO autorizzati; il secondo è senza BNO055.
+Hostname `axio-<MAC completo>.local`, servizio `_axio._udp` e discovery
+asincrona STA implementati e verificati su LAN reale. Dashboard esclusa;
+risultati e limiti del collaudo 3D nel rapporto di verifica.
+[Architettura e comandi Wi-Fi](docs/phase3-connectivity.md),
+[verifiche e memoria 3A/3B/3C/3D](docs/phase3-verification.md),
+[piano LAN 3C](docs/phase3c-lan-plan.md).
+
+Base storica Fase 2, **Checkpoint B**: core modulare per Seeed XIAO ESP32C3 + BNO055,
 diagnostica USB JSON Lines e motore OSC configurabile separato dal core.
 Matematica V1.1 invariata, configurazione validata e persistente a due slot.
-Dashboard e Fase 3 non avviate. Sul Checkpoint A sono verificati upload, USB,
+Sul Checkpoint A sono verificati upload, USB,
 BNO055 ready e 99,774 Hz. Collaudo hardware B PASS dopo correzioni USB/client/
 scheduler: IMU 99,947 Hz, OSC Mac 99,942 pacchetti/s, routing moderato e
 persistenza dopo reboot verificati; configurazione originale ripristinata.
@@ -16,7 +27,8 @@ Schema, metriche e procedura hardware: [motore OSC](docs/phase2-osc.md).
 | `firmware/Axio/Axio.ino` | Sketch apribile direttamente con Arduino IDE |
 | `firmware/Axio/hardware_config.h` | Mappa confermata: SDA GPIO6/D4, SCL GPIO7/D5, BNO055 0x29 |
 | `firmware/Axio/src/core/` | Acquisizione, taratura, campioni, diagnostica e scheduler |
-| `firmware/Axio/src/transport/` | Wi-Fi e adattatore UDP/NVS del motore OSC |
+| `firmware/Axio/src/transport/` | Adattatore UDP/NVS OSC e compatibilità Legacy |
+| `firmware/Axio/src/connectivity/` | Manager STA, journal reti e adattatore ESP32 |
 | `firmware/Axio/src/osc/` | Schema, preset, codec, scheduling, routing e journal |
 | `firmware/Axio/src/diagnostics/` | Protocollo seriale limitato, servizio e invio USB senza attese |
 | `tests/fixtures/phase0-Axio.ino` | Copia Fase 0 congelata, controllo byte per byte |
@@ -41,6 +53,9 @@ AXIO 1 PING
 ```
 
 Disponibili PING, INFO, STATUS, METRICS, TARE, CONFIG GET e DIAG RESET.
+WIFI GET/SET/DELETE gestiscono le reti; AP CREDENTIALS mostra SSID e password
+AP su richiesta USB. DISCOVERY GET legge i tracker presenti nella cache LAN,
+senza avviare una nuova scansione. Nessun routing OSC automatico dalla discovery.
 CONFIG VALIDATE controlla integralmente lo schema 1 senza applicarlo;
 CONFIG APPLY salva e attiva solo una configurazione valida. TARE cambia i riferimenti
 in RAM; DIAG RESET azzera la finestra diagnostica. Nessun output periodico.
@@ -61,7 +76,7 @@ python3 -m venv .venv
 
 Senza porta o pyserial: NOT RUN, exit 2. Test falliti: exit 1. Report senza
 sovrascrittura. Wi-Fi/ricevitore richiesti solo per le opzioni dedicate
-`--require-wifi --osc-seconds 10`; configurare prima sul tracker la destinazione
+`--require-wifi --wifi-wait-seconds 20 --osc-seconds 10`; configurare prima sul tracker la destinazione
 Mac. `--reset-metrics` modifica esplicitamente i contatori. La persistenza del
 nuovo motore è testata su host; ripristino fisico sulla XIAO ancora NOT RUN.
 
@@ -100,13 +115,13 @@ temporanei e cache sotto `.build/`. Ripetibilità con la toolchain registrata,
 senza promessa di binari identici tra host o date diverse. Librerie modificate
 localmente non sono riconosciute dal solo controllo di versione.
 
-Per conservare i log e compilare anche l'originale, copiato senza modifiche
+Per compilare anche l'originale, copiato senza modifiche
 in una cartella Arduino temporanea dentro il repository:
 
 ```sh
 mkdir -p .build
-bash scripts/compile.sh > .build/compile.log 2>&1
-bash scripts/compile.sh --baseline > .build/compile-baseline.log 2>&1
+bash scripts/compile.sh
+bash scripts/compile.sh --baseline
 ```
 
 Su un'altra macchina, **solo dopo autorizzazione**, predisporre Arduino CLI
@@ -156,9 +171,10 @@ python3 -B tools/analyze_capture.py captures/baseline-01.jsonl
 ```
 
 La cattura non sovrascrive un file esistente. Durata 0 attende Ctrl-C. Per il firmware B usare CONFIG APPLY con IP LAN del Mac e porta 16888; il default `0.0.0.0` non è
-una destinazione operativa da assumere valida. L'AP storico si chiama
-`Tracker_<id>` e viene richiesto senza password; il futuro AP protetto non è
-ancora implementato. Il ricevitore può richiedere consenso al firewall macOS.
+una destinazione operativa da assumere valida. Nei firmware storici precedenti al 3A, l'AP si chiamava
+`Tracker_<id>` senza password. Il firmware 3B usa `Axio-<MAC completo>`, WPA2
+e password `12345678`; dopo il fallback aprire `http://192.168.4.1/`.
+Il firmware 3A intermedio configurava le reti solo via USB. Il ricevitore può richiedere consenso al firewall macOS.
 
 Ogni riga JSONL rappresenta **un datagramma**, con timestamp host UNIX e monotono
 in ns, sorgente, dimensione e messaggi con indirizzo, type tag e valori. I

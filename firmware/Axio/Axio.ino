@@ -5,6 +5,7 @@
 #include "src/core/Scheduler.h"
 #include "src/transport/LegacyTransport.h"
 #include "src/transport/OscRuntime.h"
+#include "src/connectivity/ConnectivityRuntime.h"
 #include "src/diagnostics/UsbDiagnostics.h"
 #if !ARDUINO_USB_CDC_ON_BOOT
 #error "Axio USB diagnostics require USB CDC On Boot: Enabled"
@@ -24,7 +25,8 @@ void calibrateReference() { imuManager.calibrateReference(); }
 struct DiagnosticPlatform {
   uint64_t nowUs() { return monotonicClock.nowUs(); }
   axio::RuntimeStatus status() { return oscRuntimeStatus(); }
-  bool configCommand(const char *id,char *command,char *out) {return oscConfigCommand(id,command,out);}
+  bool configCommand(const char *id,char *command,char *out) {return connectivityCommand(id,command,out)||oscConfigCommand(id,command,out);}
+  void connectivityJson(char *out,size_t cap) {::connectivityJson(out,cap);}
   void resetMetrics() {resetOscMetrics();}
   void metricsJson(char *out,size_t cap) {oscMetricsJson(out,cap);}
   bool tare() { return tareOscRuntime(); }
@@ -39,11 +41,12 @@ void setup() {
   Serial.setTxTimeoutMs(0);
   setupLegacyTransport(calibrateReference);
   imuManager.begin();
+  setupConnectivity();
   setupOscRuntime([]()->bool { return imuManager.calibrateReference(); });
 }
 
 void loop() {
-  processLegacyPortal();
+  tickConnectivity();
   if (scheduler.due(uint32_t(millis()))) {
     const uint64_t acquireStart = monotonicClock.nowUs();
     if (imuManager.acquire()) {

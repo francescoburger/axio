@@ -117,6 +117,18 @@ class SerialTests(unittest.TestCase):
         self.assertFalse(report['hardware_executed'])
         self.assertTrue(all(t['result']=='NOT RUN' for t in report['tests']))
 
+    def test_hardware_wifi_wait_delayed_ready_and_timeout_are_read_only(self):
+        client=mock.Mock()
+        client.request.side_effect=[dict(wifi_connected=False),dict(wifi_connected=True)]
+        with mock.patch.object(hardware_test.time,'monotonic',return_value=0),mock.patch.object(hardware_test.time,'sleep'):
+            status=hardware_test.wait_for_wifi(client,dict(wifi_connected=False),5)
+        self.assertTrue(status['wifi_connected'])
+        self.assertEqual(client.request.call_args_list,[mock.call('STATUS'),mock.call('STATUS')])
+        client.reset_mock()
+        with mock.patch.object(hardware_test.time,'monotonic',side_effect=[0,6]):
+            status=hardware_test.wait_for_wifi(client,dict(wifi_connected=False),5)
+        self.assertFalse(status['wifi_connected']);client.request.assert_not_called()
+
     def test_hardware_runner_mutations_opt_in_and_failures(self):
         class Port:
             def __init__(self, *args, **kwargs):

@@ -3,6 +3,5 @@
 #include "../diagnostics/DiagnosticService.h"
 axio::RuntimeStatus legacyRuntimeStatus();
 void setupLegacyTransport(void (*tare)());
-void processLegacyPortal();
 void checkIncomingOSC();
 void sendLegacySample(const axio::Sample &sample);

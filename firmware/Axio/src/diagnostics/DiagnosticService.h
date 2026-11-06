@@ -24,6 +24,8 @@ template<class Platform> class DiagnosticService {
   template<class P> static void reset(P &,long) {}
   template<class P> static auto metrics(P &p,char *out,size_t cap,int) -> decltype(p.metricsJson(out,cap),void()) {p.metricsJson(out,cap);}
   template<class P> static void metrics(P &,char *out,size_t,long) {strcpy(out,"null");}
+  template<class P> static auto connectivity(P &p,char *out,size_t cap,int) -> decltype(p.connectivityJson(out,cap),void()) {p.connectivityJson(out,cap);}
+  template<class P> static void connectivity(P &,char *out,size_t,long) {strcpy(out,"null");}
  public:
   DiagnosticService(TrackerState &t, Platform &p):tracker(t),platform(p) {}
   void execute(const char *id, char *command, char *out) {
@@ -34,7 +36,7 @@ template<class Platform> class DiagnosticService {
     uint64_t now=platform.nowUs();
     if (!strcmp(command,"PING")) strcpy(data,"{\"pong\":true}");
     else if (!strcmp(command,"INFO")) snprintf(data,sizeof(data),
-      "{\"firmware\":\"Axio\",\"version\":\"2.0.0-checkpoint-b\",\"protocol\":1,\"board\":\"XIAO_ESP32C3\",\"build\":\"%s %s\",\"cdc_on_boot\":true,\"config_engine\":%s}",__DATE__,__TIME__,platform.status().engine?"true":"false");
+      "{\"firmware\":\"Axio\",\"version\":\"3.0.0-checkpoint-3d\",\"protocol\":1,\"board\":\"XIAO_ESP32C3\",\"build\":\"%s %s\",\"cdc_on_boot\":true,\"config_engine\":%s}",__DATE__,__TIME__,platform.status().engine?"true":"false");
     else if (!strcmp(command,"STATUS")) {
       RuntimeStatus s=platform.status();
       const char *states[]={"uninitialized","ready","init_failed","read_error"};
@@ -76,6 +78,10 @@ template<class Platform> class DiagnosticService {
       if (command[n]!=' ' || !JsonSyntax(command+n+1).object()) error="invalid_json";
       else error="config_engine_unavailable";
     } else error="unknown_command";
+    if(!error&&(!strcmp(command,"INFO")||!strcmp(command,"STATUS")||!strcmp(command,"METRICS"))) {
+      size_t n=strlen(data);strcpy(data+n-1,",\"connectivity\":");n=strlen(data);
+      connectivity(platform,data+n,sizeof(data)-n-1,0);strcat(data,"}");
+    }
     SerialProtocol::reply(out,id,error,data);
   }
 };

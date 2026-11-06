@@ -85,6 +85,15 @@ def rates(before, after):
     return result
 
 
+def wait_for_wifi(client, status, seconds):
+    """Optional read-only grace period for asynchronous firmware startup."""
+    deadline = time.monotonic() + seconds
+    while not status.get('wifi_connected') and time.monotonic() < deadline:
+        time.sleep(min(.1, max(0, deadline-time.monotonic())))
+        status = client.request('STATUS')
+    return status
+
+
 def osc_capture(duration, bind, port):
     from osc_receiver import decode_packet, OSCError
     from analyze_capture import summarize
@@ -118,14 +127,16 @@ def main(argv=None):
     parser.add_argument('--tare', action='store_true', help='MODIFICA riferimenti in RAM')
     parser.add_argument('--reset-metrics', action='store_true', help='MODIFICA contatori diagnostici')
     parser.add_argument('--require-wifi', action='store_true')
+    parser.add_argument('--wifi-wait-seconds', type=float, default=0,
+                        help='attesa STATUS in sola lettura prima di verificare --require-wifi (default 0)')
     parser.add_argument('--osc-seconds', type=float, default=0, help='test ricezione OSC dalla rete')
     parser.add_argument('--osc-bind', default='0.0.0.0')
     parser.add_argument('--osc-port', type=int, default=16888)
     parser.add_argument('--report', type=Path)
     args = parser.parse_args(argv)
-    if (not all(math.isfinite(v) for v in (args.timeout, args.boot_timeout, args.metrics_seconds, args.osc_seconds)) or
+    if (not all(math.isfinite(v) for v in (args.timeout, args.boot_timeout, args.metrics_seconds, args.osc_seconds, args.wifi_wait_seconds)) or
             min(args.timeout, args.boot_timeout, args.metrics_seconds) <= 0 or
-            args.osc_seconds < 0 or not 1 <= args.osc_port <= 65535):
+            args.osc_seconds < 0 or args.wifi_wait_seconds < 0 or not 1 <= args.osc_port <= 65535):
         parser.error('timeout, durate o porta non validi')
     try:
         import serial
@@ -169,6 +180,8 @@ def main(argv=None):
                 record('communication', 'PASS', pong)
                 for command in ('INFO', 'STATUS', 'CONFIG GET'):
                     data = client.request(command)
+                    if command == 'STATUS' and args.require_wifi and args.wifi_wait_seconds:
+                        data = wait_for_wifi(client, data, args.wifi_wait_seconds)
                     record(command.lower(), 'PASS', data)
                     if command == 'STATUS':
                         record('imu', 'PASS' if data.get('imu') == 'ready' and data.get('sample_valid') else 'FAIL', data)

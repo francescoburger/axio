@@ -8,3 +8,4 @@ bool oscConfigCommand(const char *id,char *command,char *out);
 void resetOscMetrics();
 axio::RuntimeStatus oscRuntimeStatus();
 void oscMetricsJson(char *out,size_t cap);
+uint16_t oscListenPort();

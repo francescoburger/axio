@@ -1,4 +1,4 @@
-# Moduli Fase 2 — Checkpoint B
+# Moduli — Checkpoint 3C
 
 Arduino compila ricorsivamente questa cartella. `../Axio.ino` coordina:
 
@@ -12,7 +12,13 @@ Arduino compila ricorsivamente questa cartella. `../Axio.ino` coordina:
   timestamp fine lettura e sequenza. Nessuna allocazione dinamica per campione.
 - `core/TrackerState.h`, `core/Diagnostics.h`: ultimo valido, stato e metriche RAM.
 - `core/Scheduler.h`: periodo storico 10 ms, senza catch-up, rollover unsigned.
-- `transport/LegacyTransport.*`: preferenze, portale Wi-Fi e OSC storici;
+- `connectivity/ConnectivityManager.h`: policy STA e journal Wi-Fi separato;
+  `ConnectivityRuntime.*`: driver ESP32 e comandi USB. `ApRuntime.*`, `FallbackAp.h` e `ProvisioningHttp.h`/`ProvisioningSocket.h`
+  aggiungono AP WPA2 e provisioning limitato, con budget e socket non bloccanti.
+- `connectivity/DiscoveryManager.h`: identità e cache peer, TTL, scheduler query
+  e lifecycle testabili su host. `DiscoveryRuntime.*`: hostname DHCP/mDNS,
+  servizio `_axio._udp` e adattatore query asincrone ESP-IDF, solo su STA.
+- `transport/LegacyTransport.*`: lettura preferenze e OSC storici;
   trasmette soltanto il campione passato, senza acquisire sensori.
 - `diagnostics/SerialProtocol.h`: framing ASCII, ID, timeout e sintassi JSON limitata.
 - `diagnostics/DiagnosticService.h`: risposte JSONL, stato, metriche e tara comune.
@@ -28,4 +34,6 @@ inviati. Non confondere l'assenza di errori I²C con qualità della fusione.
 Metriche e limiti: `../../../docs/phase2-verification.md` e
 `../../../docs/phase2-osc.md`. `osc/` contiene schema, codec, engine e journal;
 `transport/OscRuntime.*` collega UDP e NVS. Il loop non usa più il serializer
-storico, conservato per regressione. NetworkManager e dashboard non implementati.
+storico, conservato per regressione. Il manager STA sostituisce WiFiManager;
+La dashboard non è implementata. Policy, migrazione e limiti:
+`../../../docs/phase3-connectivity.md`.
