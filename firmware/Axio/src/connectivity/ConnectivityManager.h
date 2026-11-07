@@ -6,8 +6,11 @@
 namespace axio { namespace connectivity {
 constexpr unsigned MaxNetworks=8;
 struct WifiNetwork { char ssid[33]={}; char password[65]={}; uint8_t priority=0; };
-struct Config { uint8_t count=0; WifiNetwork networks[MaxNetworks]; };
+struct Config { char apPassword[64]={}; uint8_t count=0; WifiNetwork networks[MaxNetworks]; };
 inline const char *validate(const Config &c) {
+  size_t ap=strnlen(c.apPassword,sizeof(c.apPassword));
+  if(ap && (ap<8 || ap>63))return "invalid_ap_password";
+  for(size_t i=0;i<ap;++i)if(c.apPassword[i]<32 || c.apPassword[i]>126)return "invalid_ap_password";
   if(c.count>MaxNetworks)return "too_many_networks";
   for(unsigned i=0;i<c.count;++i) {
     const auto &n=c.networks[i];
@@ -30,15 +33,19 @@ inline uint32_t crc(const uint8_t *p,size_t n) {
 // Independent namespace and format; never writes the OSC journal or SDK credentials.
 template<class Store> class Journal {
   Store &store;
-  static constexpr size_t Size=16+1+MaxNetworks*99;
+  static constexpr size_t LegacySize=16+1+MaxNetworks*99,Size=LegacySize+64;
   uint8_t bytes[Size]={},expected[Size]={};
   int active=-1; uint32_t generation=0;
   static void put(uint8_t *p,uint32_t v){for(unsigned i=0;i<4;++i)p[i]=uint8_t(v>>(8*i));}
   static uint32_t get(const uint8_t *p){return uint32_t(p[0])|uint32_t(p[1])<<8|uint32_t(p[2])<<16|uint32_t(p[3])<<24;}
   bool read(int slot,Config &c,uint32_t &g) {
-    if(store.read(slot,bytes,Size)!=Size||get(bytes)!=0x31575841||get(bytes+8)!=Size-16||get(bytes+12)!=crc(bytes+16,Size-16))return false;
+    size_t size=store.read(slot,bytes,Size);
+    bool legacy=size==LegacySize&&get(bytes)==0x31575841;
+    if(!legacy&&(size!=Size||get(bytes)!=0x32575841))return false;
+    if(get(bytes+8)!=size-16||get(bytes+12)!=crc(bytes+16,size-16))return false;
     c=Config();c.count=bytes[16];
     for(unsigned i=0;i<MaxNetworks;++i){auto &n=c.networks[i];const uint8_t *p=bytes+17+i*99;memcpy(n.ssid,p,33);memcpy(n.password,p+33,65);n.priority=p[98];}
+    if(!legacy)memcpy(c.apPassword,bytes+LegacySize,64);
     g=get(bytes+4);return !validate(c);
   }
  public:
@@ -55,8 +62,9 @@ template<class Store> class Journal {
   }
   bool save(const Config &c) {
     if(validate(c)||generation==0xffffffffu)return false;
-    memset(expected,0,Size);put(expected,0x31575841);put(expected+4,generation+1);put(expected+8,Size-16);expected[16]=c.count;
+    memset(expected,0,Size);put(expected,0x32575841);put(expected+4,generation+1);put(expected+8,Size-16);expected[16]=c.count;
     for(unsigned i=0;i<c.count;++i){const auto &n=c.networks[i];uint8_t *p=expected+17+i*99;memcpy(p,n.ssid,strlen(n.ssid));memcpy(p+33,n.password,strlen(n.password));p[98]=n.priority;}
+    memcpy(expected+LegacySize,c.apPassword,64);
     put(expected+12,crc(expected+16,Size-16));int next=active==0?1:0;
     if(!store.write(next,expected,Size)||store.read(next,bytes,Size)!=Size||memcmp(bytes,expected,Size)||!store.commit(uint64_t(generation+1)*2+next))return false;
     active=next;++generation;present=true;return true;
@@ -99,12 +107,19 @@ template<class Driver,class Persistence> class ConnectivityManager {
     }
     sort();transition(config.count?State::Backoff:State::Empty,"boot",now);wait=0;
   }
-  const char *apply(const Config &c,uint32_t now) {
+  const char *persist(const Config &c) {
     if(const char *e=validate(c))return e;
     if(!journal.save(c)){storageError="persistence_failed";return storageError;}
+    return nullptr;
+  }
+  void activate(const Config &c,uint32_t now) {
     config=c;source="applied";storageError=nullptr;sort();cursor=0;backoff=1000;wait=0;
     if(online){online=false;++disconnects;offlineSince=now;}
-    stop("configuration_changed",now);return nullptr;
+    stop("configuration_changed",now);
+  }
+  const char *apply(const Config &c,uint32_t now) {
+    if(const char *error=persist(c))return error;
+    activate(c,now);return nullptr;
   }
   void tick(uint32_t now) {
     bool up=driver.connected();

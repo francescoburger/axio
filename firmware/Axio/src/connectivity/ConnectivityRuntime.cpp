@@ -31,7 +31,9 @@ struct Driver {
 } driver;
 Journal<Store> journal(store);
 ConnectivityManager<Driver,decltype(journal)> manager(driver,journal);
-Config candidate;
+Config candidate,stagedNetwork;
+bool staged=false;unsigned revision=1;
+void changed(){revision=revision==65535?1:revision+1;}
 char response[1800];
 int digit(char c){if(c>='0'&&c<='9')return c-'0';if(c>='a'&&c<='f')return c-'a'+10;if(c>='A'&&c<='F')return c-'A'+10;return -1;}
 bool unhex(const char *p,char *out,size_t cap) {
@@ -68,6 +70,7 @@ bool connectivityCommand(const char *id,char *command,char *out) {
     connectivityNetworksJson(response,sizeof(response));
     axio::SerialProtocol::reply(out,id,nullptr,response);return true;
   }
+  if(staged){axio::SerialProtocol::reply(out,id,"network_apply_pending");return true;}
   candidate=manager.get();
   if(!strncmp(command,"WIFI SET ",9)) {
     char *priority=command+9,*ssid=strchr(priority,' '),*password=ssid?strchr(ssid+1,' '):nullptr;
@@ -90,7 +93,7 @@ bool connectivityCommand(const char *id,char *command,char *out) {
       if(i==candidate.count)error="network_not_found";
       else {for(unsigned k=i+1;k<candidate.count;++k)candidate.networks[k-1]=candidate.networks[k];candidate.networks[--candidate.count]=WifiNetwork();}}
   } else error="unknown_wifi_command";
-  if(!error)error=manager.apply(candidate,uint32_t(millis()));
+  if(!error){error=manager.apply(candidate,uint32_t(millis()));if(!error)changed();}
   axio::SerialProtocol::reply(out,id,error,"{\"applied\":true,\"persistent\":true}");return true;
 }
 bool connectivityNetworksJson(char *out,size_t cap) {
@@ -100,10 +103,11 @@ bool connectivityNetworksJson(char *out,size_t cap) {
 }
 const char *updateConnectivityNetwork(const char *ssid,const char *password,unsigned priority,bool remove) {
   if(!ssid||!password||strlen(ssid)>32||strlen(password)>64||priority>255)return "invalid_network";
+  if(staged)return "network_apply_pending";
   candidate=manager.get();unsigned i=0;while(i<candidate.count&&strcmp(candidate.networks[i].ssid,ssid))++i;
   if(remove){if(i==candidate.count)return "network_not_found";for(unsigned k=i+1;k<candidate.count;++k)candidate.networks[k-1]=candidate.networks[k];candidate.networks[--candidate.count]=WifiNetwork();}
   else {if(i==MaxNetworks)return "too_many_networks";WifiNetwork n;strcpy(n.ssid,ssid);strcpy(n.password,password);n.priority=uint8_t(priority);candidate.networks[i]=n;if(i==candidate.count)++candidate.count;}
-  return manager.apply(candidate,uint32_t(millis()));
+  const char *error=manager.apply(candidate,uint32_t(millis()));if(!error)changed();return error;
 }
 void connectivityJson(char *out,size_t cap) {
   char ssid[193]={};if(driver.connected())quoteSsid(WiFi.SSID().c_str(),ssid);
@@ -115,3 +119,60 @@ void connectivityJson(char *out,size_t cap) {
   size_t n=strlen(out);if(n+8<cap){strcpy(out+n-1,",\"ap\":");n=strlen(out);apRuntimeJson(out+n,cap-n-1);strcat(out,"}");}
   n=strlen(out);if(n+22<cap){strcpy(out+n-1,",\"discovery_details\":");n=strlen(out);discoveryJson(out+n,cap-n-1);strcat(out,"}");}
 }
+
+const char *connectivityApPassword(){return manager.get().apPassword;}
+
+// Bulk replacement preserves credentials by original slot index, independently of
+// SSID edits and reordering. Password absence means unchanged; empty means open STA.
+#include "../osc/Config.h"
+const char *dashboardNetworkChange(const char *json,bool apply) {
+  using axio::osc::Reader;
+  if(staged)return "network_apply_pending";
+  if(strlen(json)>7168||!axio::JsonSyntax(json).object())return "invalid_json";
+  candidate=Config();Reader reader(json);unsigned mask=0;bool stale=false;const auto &old=manager.get();
+  memcpy(candidate.apPassword,old.apPassword,sizeof(candidate.apPassword));
+  bool ok=reader.object([&](const char *key)->unsigned {
+    unsigned bit=0,value=0;
+    if(!strcmp(key,"revision")){if(!reader.number(value))return 0;stale=value!=revision;bit=4;}
+    else if(!strcmp(key,"networks")) {
+      if(!reader.take('['))return 0;
+      if(!reader.take(']')) {
+        do {
+          if(candidate.count>=MaxNetworks)return 0;
+          auto &network=candidate.networks[candidate.count];unsigned seen=0,original=MaxNetworks;char password[129]={};
+          bool changed=false;
+          if(!reader.object([&](const char *k)->unsigned {
+            unsigned b=0;
+            if(!strcmp(k,"ssid_hex")){char encoded[65];if(!reader.text(encoded,sizeof(encoded))||!unhex(encoded,network.ssid,sizeof(network.ssid)))return 0;b=1;}
+            else if(!strcmp(k,"original")){if(!reader.number(value)||value>=old.count)return 0;original=value;b=2;}
+            else if(!strcmp(k,"password_hex")){if(!reader.text(password,sizeof(password)))return 0;changed=true;b=4;}
+            seen|=b;return b;
+          })||!(seen&1))return 0;
+          if(changed){if(*password&&!unhex(password,network.password,sizeof(network.password)))return 0;}
+          else {if(original==MaxNetworks)return 0;memcpy(network.password,old.networks[original].password,sizeof(network.password));}
+          network.priority=MaxNetworks-candidate.count;++candidate.count;
+        }while(reader.take(','));
+        if(!reader.take(']'))return 0;
+      }
+      bit=1;
+    } else if(!strcmp(key,"ap_password_hex")) {
+      char encoded[127];if(!reader.text(encoded,sizeof(encoded))||!unhex(encoded,candidate.apPassword,sizeof(candidate.apPassword)))return 0;bit=2;
+    }
+    mask|=bit;return bit;
+  });
+  if(!ok||!reader.end()||(mask&5)!=5)return "invalid_network_config";
+  if(stale)return "network_changed_reload";
+  if(const char *error=validate(candidate))return error;
+  if(!apply)return nullptr;
+  if(const char *error=manager.persist(candidate))return error;
+  stagedNetwork=candidate;staged=true;return nullptr;
+}
+
+void activateDashboardNetwork(){
+  if(!staged)return;
+  manager.activate(stagedNetwork,uint32_t(millis()));staged=false;changed();
+  refreshApConfiguration();
+}
+unsigned dashboardNetworkRevision(){return revision;}
+const axio::connectivity::Config &dashboardNetworks(){return manager.get();}
+uint64_t connectivityReconnects(){return manager.reconnects;}

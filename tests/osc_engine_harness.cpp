@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include "src/osc/Engine.h"
+#include "src/osc/Editor.h"
 #include "src/osc/Journal.h"
 #include "src/osc/Transaction.h"
 #include "src/core/Diagnostics.h"
@@ -48,6 +49,61 @@ int main(int argc,char **argv) {
   }
   if(argc>1 && std::string(argv[1])=="--preset") {
     Config c=preset(argc>2?argv[2]:"Orientation");char out[MaxConfig+1];assert(!validate(c));assert(serialize(c,out,sizeof(out)));std::cout<<out<<'\n';return 0;
+  }
+  if(argc>1 && std::string(argv[1])=="--phase4") {
+    Editor draft;Config generated;
+    strcpy(draft.suffix[1],"real");strcpy(draft.suffix[2],"world");strcpy(draft.suffix[3],"gyro");
+    assert(!compileEditor(draft,Config(),generated));assert(generated.messageCount==4);
+    assert(generated.messages[0].argCount==7);
+    const uint8_t expected[]={4,5,6,0,1,2,3};
+    assert(!memcmp(generated.messages[0].args,expected,sizeof(expected)));
+    assert(!strcmp(generated.messages[1].address,"/motion/{id}/real"));
+    for(unsigned g=0;g<5;++g)draft.suffix[g][0]=0;
+    assert(!compileEditor(draft,Config(),generated));
+    assert(generated.messageCount==1 && generated.messages[0].argCount==16);
+    for(unsigned g=0;g<5;++g)draft.selected[g]=0;
+    assert(compileEditor(draft,Config(),generated)); // no empty OSC messages
+    draft.selected[0]=1;strcpy(draft.suffix[0],"/bad");
+    assert(compileEditor(draft,Config(),generated)); // fixed slash is not user input
+    Config legacy=preset("Motion"), modern;
+    legacy.destCount=2;legacy.destinations[1].port=19000;
+    legacy.messages[0].hz=30;legacy.messages[0].bundle=false;
+    assert(!migrateV2(legacy,modern));
+    assert(modern.schema==2 && modern.messages[0].intervalMs==34);
+    assert(modern.messages[0].routes==3);
+    char json[MaxConfig+1];assert(serialize(modern,json,sizeof(json)));
+    Config round;assert(!parse(json,round));assert(round.schema==2);
+    assert(round.messages[0].intervalMs==34);
+    Net n;Engine<Net> e(n);axio::Sample v;v.valid=true;
+    for(unsigned period: {10u,11u,13u,30u,65535u}) {
+      Config c=modern;c.messageCount=1;c.messages[0].intervalMs=period;
+      e.activate(c);n.sent.clear();
+      v.sequence++;e.tick(v,100000);assert(n.sent.size()==2);
+      assert(n.sent[0].packet[0]=='/'); // exactly one due: never a bundle
+      v.sequence++;e.tick(v,100000+period*1000-1);assert(n.sent.size()==2);
+      v.sequence++;e.tick(v,100000+period*1000);assert(n.sent.size()==4);
+      e.tick(v,100000+period*2000);assert(n.sent.size()==4); // same sequence
+      v.sequence++;e.tick(v,1000000000);assert(n.sent.size()==6); // one send, no catch-up
+      v.sequence++;e.tick(v,1000000000);assert(n.sent.size()==6);
+    }
+    modern.messageCount=2;modern.messages[0].intervalMs=11;modern.messages[1].intervalMs=13;
+    e.activate(modern);n.sent.clear();v.sequence++;e.tick(v,100000);
+    assert(n.sent.size()==2 && n.sent[0].packet[0]=='#');
+    v.sequence++;e.tick(v,111000);assert(n.sent.size()==4 && n.sent[2].packet[0]=='/');
+    v.sequence++;e.tick(v,113000);assert(n.sent.size()==6 && n.sent[4].packet[0]=='/');
+    v.sequence++;e.tick(v,243000);assert(n.sent.size()==8 && n.sent[6].packet[0]=='#');
+    // Upgrade shares the same two-slot journal; reboot and failure paths stay transactional.
+    Store store;Journal<Store> journal(store);Net txn;Engine<Net> active(txn);
+    assert(journal.save(legacy));Config before;
+    {Journal<Store> reboot(store);assert(reboot.load(before));assert(before.schema==1);}
+    store.failCommit=true;
+    assert(!strcmp(apply(modern,txn,journal,active,true),"persistence_failed"));
+    {Journal<Store> reboot(store);assert(reboot.load(before));assert(before.schema==1);}
+    store.failCommit=false;assert(!apply(modern,txn,journal,active,true));
+    {Journal<Store> reboot(store);assert(reboot.load(before));assert(before.schema==2);}
+    modern.messages[0].intervalMs=9;assert(validate(modern));
+    Config unchanged=legacy;assert(migrateV2(modern,unchanged));assert(unchanged.schema==1);
+    std::cout<<"PASS phase4"<<'\n';return 0;
   }
   Net net;Engine<Net> engine(net);Config c=preset("Motion");
   c.destCount=2;c.destinations[1].port=16890;

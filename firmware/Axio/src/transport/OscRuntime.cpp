@@ -54,7 +54,6 @@ struct Network {
 axio::osc::Engine<Network> engine(network);
 axio::osc::Journal<Storage> journal(storage);
 axio::osc::Config candidate;
-char configJson[axio::osc::MaxConfig+1];
 uint8_t received[axio::osc::MaxPacket];
 const char *source="default";
 bool listening=false;
@@ -62,12 +61,12 @@ uint64_t metricEpoch=0,suspendedNoSta=0,suspendedListener=0,suspendedAp=0;
 }
 void setupOscRuntime(bool (*tare)()) {
   network.callback=tare;storage.begin();
-  candidate=axio::osc::preset("Orientation");
+  axio::osc::setPreset("Orientation",candidate);
   auto old=legacyRuntimeStatus();
   snprintf(candidate.id,sizeof(candidate.id),"%d",old.deviceId);
   for(unsigned i=0;i<4;++i)candidate.destinations[0].ip[i]=old.ip[i];
   candidate.destinations[0].port=old.outPort;
-  if(axio::osc::validate(candidate))candidate=axio::osc::preset("Orientation");
+  if(axio::osc::validate(candidate))axio::osc::setPreset("Orientation",candidate);
   if(journal.load(candidate))source="saved";
   engine.activate(candidate);
   network.ports[0].stop();network.ports[1].stop();network.bound=false;network.triedBind=false;
@@ -102,8 +101,15 @@ axio::RuntimeStatus oscRuntimeStatus() {
 }
 bool oscConfigCommand(const char *id,char *command,char *out) {
   if(!strcmp(command,"CONFIG GET")) {
-    if(!axio::osc::serialize(engine.get(),configJson,sizeof(configJson)))axio::SerialProtocol::reply(out,id,"serialization_error");
-    else axio::SerialProtocol::reply(out,id,nullptr,configJson);
+    constexpr size_t payloadOffset=128;
+    if(!id){axio::SerialProtocol::reply(out,id,"invalid_request");return true;}
+    if(!axio::osc::serialize(engine.get(),out+payloadOffset,axio::SerialProtocol::MaxReply-payloadOffset-2))axio::SerialProtocol::reply(out,id,"serialization_error");
+    else {
+      size_t length=strlen(out+payloadOffset);char header[payloadOffset];
+      int n=snprintf(header,sizeof(header),"{\"axio\":1,\"id\":\"%s\",\"ok\":true,\"data\":",id);
+      if(n<0||size_t(n)>=sizeof(header)||size_t(n)+length+3>axio::SerialProtocol::MaxReply)axio::SerialProtocol::reply(out,id,"response_too_large");
+      else {memmove(out+n,out+payloadOffset,length);memcpy(out,header,n);strcpy(out+n+length,"}\n");}
+    }
     return true;
   }
   bool apply=!strncmp(command,"CONFIG APPLY ",13);
@@ -125,6 +131,42 @@ void oscMetricsJson(char *out,size_t cap) {
   size_t n=snprintf(out,cap,"{\"window_us\":%llu,\"udp_attempts\":%llu,\"udp_queued\":%llu,\"delivery_verified\":false,\"suspended_no_sta\":%llu,\"suspended_listener\":%llu,\"suspended_ap\":%llu,\"listener_failures\":%llu,\"udp_errors\":%llu,\"malformed_commands\":%llu,\"max_send_us\":%llu,\"max_receive_us\":%llu,\"max_config_us\":%llu,\"config_source\":\"%s\",\"listening\":%s,\"messages\":[",
     (unsigned long long)window,(unsigned long long)m.udpAttempts,(unsigned long long)m.udpQueued,(unsigned long long)suspendedNoSta,(unsigned long long)suspendedListener,(unsigned long long)suspendedAp,(unsigned long long)network.bindFailures,(unsigned long long)(m.udpAttempts-m.udpQueued),(unsigned long long)m.malformed,
     (unsigned long long)m.maxSendUs,(unsigned long long)m.maxReceiveUs,(unsigned long long)m.maxApplyUs,source,listening?"true":"false");
-  for(unsigned i=0;i<engine.get().messageCount&&n<cap;++i)n+=snprintf(out+n,cap-n,"%s{\"index\":%u,\"requested_hz\":%u,\"scheduled\":%llu,\"effective_hz\":%.6f,\"attempted\":%llu,\"queued\":%llu}",i?",":"",i,engine.get().messages[i].hz,(unsigned long long)m.schedules[i],window?m.schedules[i]*1e6/double(window):0,(unsigned long long)m.messageAttempts[i],(unsigned long long)m.messageQueued[i]);
+  for(unsigned i=0;i<engine.get().messageCount&&n<cap;++i) {
+    char timing[80];const auto &message=engine.get().messages[i];
+    if(engine.get().schema==2)snprintf(timing,sizeof(timing),"\"requested_hz\":null,\"interval_ms\":%u",message.intervalMs);
+    else snprintf(timing,sizeof(timing),"\"requested_hz\":%u",message.hz);
+    n+=snprintf(out+n,cap-n,"%s{\"index\":%u,%s,\"scheduled\":%llu,\"effective_hz\":%.6f,\"attempted\":%llu,\"queued\":%llu}",i?",":"",i,timing,(unsigned long long)m.schedules[i],window?m.schedules[i]*1e6/double(window):0,(unsigned long long)m.messageAttempts[i],(unsigned long long)m.messageQueued[i]);
+  }
   if(n<cap)snprintf(out+n,cap-n,"]}");
 }
+const axio::osc::Config &oscConfiguration(){return engine.get();}
+const char *applyDashboardOsc(const char *json,bool apply){
+  const char *error=axio::osc::parse(json,candidate);
+  if(!error&&(!candidate.hasEditor||candidate.schema!=2))return "single_editor_required";
+  if(!error&&strcmp(candidate.id,engine.get().id))return "tracker_id_is_global";
+  if(!error&&apply){error=axio::osc::apply(candidate,network,journal,engine,listening);if(!error){source="applied";listening=network.bound;resetOscMetrics();}}
+  return error;
+}
+
+const char *initializeDashboardOsc(const char *hardware){
+  if(engine.get().schema==2&&engine.get().hasEditor)return nullptr;
+  candidate=engine.get();
+  if(!strcmp(source,"default"))snprintf(candidate.id,sizeof(candidate.id),"%s",hardware);
+  axio::osc::Editor editor;
+  const char *error=axio::osc::compileEditor(editor,candidate,candidate);
+  if(!error)error=axio::osc::apply(candidate,network,journal,engine,listening);
+  if(!error){source="dashboard";listening=network.bound;resetOscMetrics();}
+  return error;
+}
+const char *changeTrackerId(const char *id){
+  if(!id||!*id||strlen(id)>16)return "invalid_id";
+  candidate=engine.get();strcpy(candidate.id,id);
+  const char *error=candidate.hasEditor?axio::osc::compileEditor(candidate.editor,candidate,candidate):axio::osc::validate(candidate);
+  if(!error)error=axio::osc::apply(candidate,network,journal,engine,listening);
+  if(!error){source="applied";listening=network.bound;resetOscMetrics();}
+  return error;
+}
+void stopOscRuntime(){network.ports[0].stop();network.ports[1].stop();network.bound=false;listening=false;}
+uint64_t oscDatagrams(){return engine.metrics.udpQueued;}
+uint64_t oscErrors(){return engine.metrics.udpAttempts-engine.metrics.udpQueued;}
+uint64_t oscWindowUs(){return uint64_t(esp_timer_get_time())-metricEpoch;}

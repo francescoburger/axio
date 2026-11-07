@@ -1,6 +1,18 @@
-# Moduli — Checkpoint 3C
+# Moduli — Fase 4
 
-Arduino compila ricorsivamente questa cartella. `../Axio.ino` coordina:
+Arduino compila ricorsivamente questa cartella. `web/DashboardRuntime.*`
+collega il server STA non bloccante, gli asset flash compressi e gli handler
+`DashboardService.h`. `DashboardHttp.h` limita RX/TX e verifica Host, Origin e
+token; `JsonWriter.h` produce JSON senza DOM dinamico. `ImageSize.h` legge
+soltanto gli header dell'immagine, evitando la verifica flash nel loop.
+`power/Battery.h` media 16 letture ADC su A0/GPIO2 senza burst; percentuale
+non stimata. `power/PowerController.h` gestisce conferma/ACK, SUSPEND con
+readback, arresto servizi e wake GPIO5 LOW/pull-up.
+Gli asset hanno sorgenti in `../../web/`; `scripts/package_web.py` aggiorna
+l'header disponibile anche per Arduino IDE. Il nome comune mDNS non è attivo.
+Vedere `../../../docs/phase4-verification.md` per evidenze e limiti.
+
+ `../Axio.ino` coordina:
 
 - `core/BnoDevice.h`: adattatore hardware con letture controllate; pin esclusivamente
   da `../hardware_config.h` (relativo a `src`, ovvero `../../hardware_config.h`

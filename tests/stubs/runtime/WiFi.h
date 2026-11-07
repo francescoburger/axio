@@ -10,6 +10,8 @@ struct IPAddress {
 struct FakeAP {bool up=false;bool started(){return up;}};
 struct FakeSTA {bool begin(bool){return true;}bool config(){return true;}};
 struct FakeWiFi {FakeAP AP;int mode=WIFI_STA;bool failApStart=false,failApStop=false;unsigned apStarts=0,apStops=0;
+  bool enableSTA(bool on){mode=on?WIFI_STA:0;return true;}
+  IPAddress gatewayIP(){return IPAddress(127,0,0,1);}IPAddress subnetMask(){return IPAddress(255,0,0,0);}int RSSI(){return -58;}
   int getMode(){return mode;}bool enableAP(bool enabled){if(enabled&&failApStart)return false;if(!enabled&&failApStop)return false;if(enabled){mode|=WIFI_AP;AP.up=true;++apStarts;}else {mode&=~WIFI_AP;AP.up=false;++apStops;}return true;}
   IPAddress softAPIP(){return AP.up?IPAddress(192,168,4,1):IPAddress(0,0,0,0);}
   std::string hostname;bool setHostname(const char *name){hostname=name;return true;}

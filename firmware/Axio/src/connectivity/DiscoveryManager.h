@@ -14,7 +14,7 @@ inline bool hostLabel(const char *s,const char *hw){
   if(n==17)return true;if(s[17]!='-'||n==18)return false;
   for(size_t i=18;i<n;++i)if(s[i]<'0'||s[i]>'9')return false;return true;
 }
-struct Peer {char hw[13]={},host[64]={};uint8_t ip[4]={};uint16_t port=0;uint32_t seen=0,lifetime=0;};
+struct Peer {char id[17]={};char hw[13]={},host[64]={};uint8_t ip[4]={};uint16_t port=0;uint32_t seen=0,lifetime=0;};
 class PeerCache {
   Peer peers[MaxPeers];
  public:
@@ -22,6 +22,9 @@ class PeerCache {
   void clear(){for(auto &p:peers)p=Peer();}
   void expire(uint32_t now){for(auto &p:peers)if(p.port&&uint32_t(now-p.seen)>=p.lifetime)p=Peer();}
   const Peer &get(unsigned i)const{return peers[i];}
+  void trackerId(const char *hw,const char *id){
+    for(auto &p:peers)if(p.port&&!strcmp(p.hw,hw)){snprintf(p.id,sizeof(p.id),"%s",id);break;}
+  }
   unsigned count()const{unsigned n=0;for(const auto &p:peers)if(p.port)++n;return n;}
   bool observe(const char *hw,const char *host,const uint8_t ip[4],uint16_t port,uint32_t ttl,uint32_t now,const char *self){
     if(!hardwareId(hw)||!hostLabel(host,hw)||!port||!ip[0]||ip[0]==127||ip[0]>=224||ip[3]==255){++rejected;return false;}

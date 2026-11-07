@@ -9,3 +9,13 @@ void resetOscMetrics();
 axio::RuntimeStatus oscRuntimeStatus();
 void oscMetricsJson(char *out,size_t cap);
 uint16_t oscListenPort();
+namespace axio { namespace osc {struct Config;} }
+const axio::osc::Config &oscConfiguration();
+const char *applyDashboardOsc(const char *json,bool apply);
+
+const char *initializeDashboardOsc(const char *hardware);
+const char *changeTrackerId(const char *id);
+void stopOscRuntime();
+uint64_t oscDatagrams();
+uint64_t oscErrors();
+uint64_t oscWindowUs();

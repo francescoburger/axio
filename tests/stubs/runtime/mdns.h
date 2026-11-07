@@ -30,7 +30,7 @@ inline int mdns_hostname_set(const char *name){fakeMdns().hostname=name;return E
 inline int mdns_hostname_get(char *out){strcpy(out,fakeMdns().hostname.c_str());return ESP_OK;}
 inline int mdns_instance_name_set(const char *name){fakeMdns().instance=name;return ESP_OK;}
 inline int mdns_service_add(const char *,const char *service,const char *proto,uint16_t port,mdns_txt_item_t *txt,size_t count){
-  auto &m=fakeMdns();if(m.failService)return -1;assert(!strcmp(service,"_axio")&&!strcmp(proto,"_udp")&&count==3);
+  auto &m=fakeMdns();if(m.failService)return -1;if(!strcmp(service,"_http")){assert(!strcmp(proto,"_tcp")&&count==1);return ESP_OK;}assert(!strcmp(service,"_axio")&&!strcmp(proto,"_udp")&&count==3);
   m.port=port;for(size_t i=0;i<count;++i){if(!strcmp(txt[i].key,"model"))m.model=txt[i].value;else if(!strcmp(txt[i].key,"schema"))m.schema=txt[i].value;else if(!strcmp(txt[i].key,"hw"))m.hw=txt[i].value;else assert(false);}return ESP_OK;
 }
 inline int mdns_service_port_set(const char *,const char *,uint16_t port){auto &m=fakeMdns();if(m.failPort)return -1;m.port=port;++m.portChanges;return ESP_OK;}
@@ -53,3 +53,5 @@ inline bool mdns_query_async_get_results(mdns_search_once_t *,uint32_t timeout,m
 }
 inline void mdns_query_results_free(mdns_result_t *){++fakeMdns().resultsFreed;}
 inline int mdns_query_async_delete(mdns_search_once_t *){auto &m=fakeMdns();assert(m.ready);m.hasQuery=false;++m.deleted;return ESP_OK;}
+
+inline int mdns_service_txt_item_set(const char *,const char *,const char *,const char *){return ESP_OK;}

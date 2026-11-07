@@ -28,7 +28,7 @@ struct Service {
 } service;
 ProvisioningSocket socket;
 ProvisioningHttp<ProvisioningSocket,Service> portal(socket,service);
-char ssid[19]={}; // Axio- plus all six MAC bytes.
+char ssid[38]={}; // Axio- plus all six MAC bytes.
 struct Driver {
   bool armed=false,serving=false;uint32_t lastBind=0;bool triedBind=false;
   uint64_t portalFailures=0;const char *error=nullptr;
@@ -39,7 +39,9 @@ struct Driver {
     // Configure while the radio is stopped: never advertise the SDK default/open AP.
     if(esp_wifi_stop()!=ESP_OK){error="ap_radio_stop_failed";return false;}
     wifi_config_t c={};memcpy(c.ap.ssid,ssid,strlen(ssid));c.ap.ssid_len=strlen(ssid);
-    memcpy(c.ap.password,credentials.password,strlen(credentials.password));c.ap.authmode=WIFI_AUTH_WPA2_PSK;
+    const char *selectedPassword=connectivityApPassword();
+    if(!*selectedPassword)selectedPassword=credentials.password;
+    memcpy(c.ap.password,selectedPassword,strlen(selectedPassword));c.ap.authmode=WIFI_AUTH_WPA2_PSK;
     c.ap.pairwise_cipher=WIFI_CIPHER_TYPE_CCMP;c.ap.max_connection=2;c.ap.channel=1;c.ap.beacon_interval=100;
     bool configured=esp_wifi_set_mode(WIFI_MODE_APSTA)==ESP_OK&&esp_wifi_set_config(WIFI_IF_AP,&c)==ESP_OK;
     bool station=esp_wifi_set_mode(WIFI_MODE_STA)==ESP_OK;
@@ -81,10 +83,11 @@ void tickApRuntime(bool sta,uint32_t offlineMs){fallback.tick(sta,offlineMs,uint
 bool apRuntimeCommand(const char *id,char *command,char *out){
   if(!strcmp(command,"AP CREDENTIALS")){
     if(!credentials.ready)axio::SerialProtocol::reply(out,id,credentials.error?credentials.error:"ap_credentials_unavailable");
-    else {char response[192];snprintf(response,sizeof(response),"{\"ssid\":\"%s\",\"password\":\"%s\",\"security\":\"WPA2-PSK\",\"setup_url\":\"http://192.168.4.1/\"}",ssid,credentials.password);axio::SerialProtocol::reply(out,id,nullptr,response);}
+    else {char response[192];snprintf(response,sizeof(response),"{\"ssid\":\"%s\",\"password\":\"%s\",\"security\":\"WPA2-PSK\",\"setup_url\":\"http://192.168.4.1/\"}",ssid,*connectivityApPassword()?connectivityApPassword():credentials.password);axio::SerialProtocol::reply(out,id,nullptr,response);}
     return true;
   }
   if(strcmp(command,"AP REKEY"))return false;
+  if(*connectivityApPassword()){axio::SerialProtocol::reply(out,id,"ap_password_managed_by_network");return true;}
   // Explicit physical-USB recovery only; never invoked by web or normal transitions.
   driver.closePortal();fallback.provisioned=false;
   if(driver.enabled()&&!driver.stop()){axio::SerialProtocol::reply(out,id,"ap_stop_failed");return true;}
@@ -98,3 +101,16 @@ void apRuntimeJson(char *out,size_t cap){
     (unsigned long long)fallback.starts,(unsigned long long)fallback.stops,(unsigned long long)fallback.failures,(unsigned long long)driver.portalFailures,
     unsigned(fallback.lastFallbackMs),fallback.reason,credentials.error?credentials.error:(driver.error?driver.error:""));
 }
+
+const char *apSsid(){return ssid;}
+void refreshApConfiguration(){
+  driver.closePortal();fallback.provisioned=false;
+  if(driver.enabled()&&!driver.stop()){driver.error="ap_stop_failed";return;}
+  fallback.provisioned=credentials.ready&&ssid[0]&&driver.arm();
+}
+void setApTrackerId(const char *id){
+  char next[38];snprintf(next,sizeof(next),"Axio-%s",id);
+  if(!strcmp(next,ssid))return;
+  snprintf(ssid,sizeof(ssid),"%s",next);refreshApConfiguration();
+}
+void stopApRuntime(){fallback.provisioned=false;driver.closePortal();driver.stop();}

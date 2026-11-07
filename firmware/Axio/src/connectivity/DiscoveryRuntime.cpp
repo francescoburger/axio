@@ -8,6 +8,7 @@
 namespace {
 using namespace axio::connectivity;
 char hardware[13]={},hostname[64]={},reported[64]={};
+char trackerId[17]={},announcedId[17]={};bool dashboardEnabled=false;
 bool identityReady=false;const char *identityError=nullptr;
 struct Driver {
   mdns_search_once_t *search=nullptr;esp_netif_t *sta=nullptr;
@@ -24,6 +25,12 @@ struct Driver {
        mdns_instance_name_set(hostname)!=ESP_OK||mdns_service_add(nullptr,"_axio","_udp",port,txt,3)!=ESP_OK){
       error="mdns_service_failed";stop();return false;
     }
+    if(dashboardEnabled){
+      mdns_txt_item_t item={"id",trackerId};
+      if(mdns_service_txt_item_set("_axio","_udp",item.key,item.value)!=ESP_OK||
+         mdns_service_add(nullptr,"_http","_tcp",80,&item,1)!=ESP_OK){error="mdns_http_failed";stop();return false;}
+      strcpy(announcedId,trackerId);
+    }
     if(mdns_netif_action(sta,MDNS_EVENT_ENABLE_IP4)!=ESP_OK){error="mdns_sta_enable_failed";stop();return false;}
     memcpy(reported,hostname,sizeof(reported));checkedName=uint32_t(millis());error=nullptr;return true;
   }
@@ -39,13 +46,18 @@ struct Driver {
   }
   void stop(){if(initialized)mdns_free();initialized=false;sta=nullptr;}
   bool query(){search=mdns_query_async_new(nullptr,"_axio","_udp",MDNS_TYPE_PTR,2000,MaxPeers,nullptr);error=search?nullptr:"mdns_query_failed";return pending();}
-  bool metadata(const mdns_result_t &r,char hw[13]){
+  bool metadata(const mdns_result_t &r,char hw[13],char id[17]){
     if(!r.txt||!r.txt_value_len||r.txt_count>16)return false;
     unsigned model=0,schema=0,ids=0;
     for(size_t i=0;i<r.txt_count;++i){
       const auto &t=r.txt[i];if(!t.key||!t.value)continue;
       if(!strcmp(t.key,"model")){if(r.txt_value_len[i]!=4||memcmp(t.value,"Axio",4))return false;++model;}
       if(!strcmp(t.key,"schema")){if(r.txt_value_len[i]!=1||t.value[0]!='1')return false;++schema;}
+      if(!strcmp(t.key,"id")){
+        size_t len=r.txt_value_len[i];if(!len||len>16||*id)return false;
+        for(size_t j=0;j<len;++j){char c=t.value[j];if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c=='-'||c=='_'))return false;}
+        memcpy(id,t.value,len);id[len]=0;
+      }
       if(!strcmp(t.key,"hw")){if(r.txt_value_len[i]!=12)return false;memcpy(hw,t.value,12);hw[12]=0;++ids;}
     }
     return model==1&&schema==1&&ids==1&&hardwareId(hw);
@@ -57,15 +69,15 @@ struct Driver {
     if(!mdns_query_async_get_results(search,0,&results,nullptr))return false;
     if(accept){unsigned visited=0;
       for(auto r=results;r&&visited<MaxPeers;r=r->next,++visited){
-        char hw[13]={};
+        char hw[13]={},id[17]={};
         if(r->esp_netif!=sta||r->ip_protocol!=MDNS_IP_PROTOCOL_V4||!r->hostname||!r->service_type||!r->proto||
-           strcmp(r->service_type,"_axio")||strcmp(r->proto,"_udp")||!metadata(*r,hw)){++filtered;continue;}
+           strcmp(r->service_type,"_axio")||strcmp(r->proto,"_udp")||!metadata(*r,hw,id)){++filtered;continue;}
         unsigned addresses=0;
         for(auto a=r->addr;a&&addresses<8;a=a->next,++addresses){
           if(a->addr.type!=ESP_IPADDR_TYPE_V4)continue;
           uint8_t ip[4];memcpy(ip,&a->addr.u_addr.ip4.addr,4);
           if(a->addr.u_addr.ip4.addr==uint32_t(WiFi.localIP()))continue;
-          if(cache.observe(hw,r->hostname,ip,r->port,r->ttl,now,hardware))break;
+          if(cache.observe(hw,r->hostname,ip,r->port,r->ttl,now,hardware)){cache.trackerId(hw,id);break;}
         }
       }
     }
@@ -93,7 +105,12 @@ void setupDiscoveryIdentity(){
 void tickDiscovery(bool sta){
   bool allowed=identityReady&&sta&&!(WiFi.getMode()&WIFI_AP);
   manager.tick(allowed,uint32_t(WiFi.localIP()),oscListenPort(),uint32_t(millis()));
-  if(manager.active)driver.updateName(uint32_t(millis()));
+  if(manager.active){
+    driver.updateName(uint32_t(millis()));
+    if(dashboardEnabled&&strcmp(announcedId,trackerId)){
+      if(mdns_service_txt_item_set("_axio","_udp","id",trackerId)==ESP_OK&&mdns_service_txt_item_set("_http","_tcp","id",trackerId)==ESP_OK)strcpy(announcedId,trackerId);
+    }
+  }
 }
 const char *discoveryHostname(){return identityReady?reported:"";}
 const char *discoveryState(){return !identityReady?"identity_error":manager.draining?"draining":!manager.active?"offline":driver.pending()?"querying":"ready";}
@@ -115,4 +132,18 @@ bool discoveryCommand(const char *id,char *command,char *out){
   }
   if(used+3>sizeof(response)){axio::SerialProtocol::reply(out,id,"response_too_large");return true;}
   strcpy(response+used,"]}");axio::SerialProtocol::reply(out,id,nullptr,response);return true;
+}
+
+void setDiscoveryTrackerId(const char *id){snprintf(trackerId,sizeof(trackerId),"%s",id);dashboardEnabled=true;}
+const char *discoveryHardware(){return hardware;}
+bool stopDiscoveryRuntime(){tickDiscovery(false);return !manager.running;}
+bool discoveryPeersJson(char *out,size_t cap){
+  manager.cache.expire(uint32_t(millis()));size_t used=0;bool comma=false;
+  if(!cap)return false;out[used++]='[';
+  for(unsigned i=0;i<MaxPeers;++i){const auto &p=manager.cache.get(i);if(!p.port)continue;
+    if(used>=cap)return false;
+    int n=snprintf(out+used,cap-used,"%s{\"id\":\"%s\",\"hw\":\"%s\",\"ip\":\"%u.%u.%u.%u\"}",comma?",":"",*p.id?p.id:p.hw,p.hw,p.ip[0],p.ip[1],p.ip[2],p.ip[3]);
+    if(n<0||size_t(n)>=cap-used)return false;used+=n;comma=true;
+  }
+  if(used+2>cap)return false;strcpy(out+used,"]");return true;
 }

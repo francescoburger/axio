@@ -12,6 +12,7 @@ mkdir -p .build/tmp .build/cache .build/arduino .build/artifacts
 export TMPDIR="$ROOT/.build/tmp"
 export ARDUINO_BUILD_CACHE_PATH="$ROOT/.build/cache"
 python3 -B scripts/check_toolchain.py
+python3 -B scripts/package_web.py
 SKETCH="$ROOT/firmware/Axio"
 BUILD="$ROOT/.build/arduino"
 OUTPUT="$ROOT/.build/artifacts"

@@ -28,6 +28,12 @@ template<class Platform> class DiagnosticService {
   template<class P> static void connectivity(P &,char *out,size_t,long) {strcpy(out,"null");}
  public:
   DiagnosticService(TrackerState &t, Platform &p):tracker(t),platform(p) {}
+  void startWindow(){if(!tracker.diagnostics.attempts)epochUs=platform.nowUs();}
+  uint64_t windowUs(){return platform.nowUs()-epochUs;}
+  void resetMetricsNow(){
+    reset(platform,0);auto &d=tracker.diagnostics;uint64_t errors=d.initErrors;
+    d=Diagnostics();d.initErrors=errors;epochUs=platform.nowUs();
+  }
   void execute(const char *id, char *command, char *out) {
     if(config(platform,id,command,out,0))return;
     const char *error=nullptr;
@@ -36,7 +42,7 @@ template<class Platform> class DiagnosticService {
     uint64_t now=platform.nowUs();
     if (!strcmp(command,"PING")) strcpy(data,"{\"pong\":true}");
     else if (!strcmp(command,"INFO")) snprintf(data,sizeof(data),
-      "{\"firmware\":\"Axio\",\"version\":\"3.0.0-checkpoint-3d\",\"protocol\":1,\"board\":\"XIAO_ESP32C3\",\"build\":\"%s %s\",\"cdc_on_boot\":true,\"config_engine\":%s}",__DATE__,__TIME__,platform.status().engine?"true":"false");
+      "{\"firmware\":\"Axio\",\"version\":\"4.0.0-dev\",\"protocol\":1,\"board\":\"XIAO_ESP32C3\",\"build\":\"%s %s\",\"cdc_on_boot\":true,\"config_engine\":%s}",__DATE__,__TIME__,platform.status().engine?"true":"false");
     else if (!strcmp(command,"STATUS")) {
       RuntimeStatus s=platform.status();
       const char *states[]={"uninitialized","ready","init_failed","read_error"};
@@ -64,10 +70,7 @@ template<class Platform> class DiagnosticService {
       if (!platform.tare()) error="imu_unavailable";
       else strcpy(data,"{\"tared\":true,\"persistent\":false}");
     } else if (!strcmp(command,"DIAG RESET")) {
-      reset(platform,0);
-      // Reset measurement window only. Keep initialization history and lifetime sequence.
-      uint64_t initErrors=d.initErrors;
-      d=Diagnostics(); d.initErrors=initErrors; epochUs=now;
+      resetMetricsNow();
       strcpy(data,"{\"reset\":true,\"preserved\":[\"init_errors\",\"sequence\",\"heap_min\"]}");
     } else if (!strcmp(command,"CONFIG GET")) {
       RuntimeStatus s=platform.status();

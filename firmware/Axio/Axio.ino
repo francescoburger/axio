@@ -7,6 +7,7 @@
 #include "src/transport/OscRuntime.h"
 #include "src/connectivity/ConnectivityRuntime.h"
 #include "src/diagnostics/UsbDiagnostics.h"
+#include "src/web/DashboardRuntime.h"
 #if !ARDUINO_USB_CDC_ON_BOOT
 #error "Axio USB diagnostics require USB CDC On Boot: Enabled"
 #endif
@@ -29,13 +30,14 @@ struct DiagnosticPlatform {
   void connectivityJson(char *out,size_t cap) {::connectivityJson(out,cap);}
   void resetMetrics() {resetOscMetrics();}
   void metricsJson(char *out,size_t cap) {oscMetricsJson(out,cap);}
-  bool tare() { return tareOscRuntime(); }
+  bool tare() { return dashboardImuAllowed()&&tareOscRuntime(); }
 } diagnosticPlatform;
 axio::DiagnosticService<DiagnosticPlatform> diagnosticService(tracker, diagnosticPlatform);
 axio::UsbDiagnostics<decltype(diagnosticService)> usbDiagnostics(diagnosticService);
 
 void setup() {
   setCpuFrequencyMhz(160);
+  prepareDashboardFlashInfo();
   Serial.setRxBufferSize(decltype(usbDiagnostics)::RxCapacity);
   Serial.begin(115200);
   Serial.setTxTimeoutMs(0);
@@ -43,11 +45,13 @@ void setup() {
   imuManager.begin();
   setupConnectivity();
   setupOscRuntime([]()->bool { return imuManager.calibrateReference(); });
+  setupDashboard(tracker,sensor,[](){diagnosticService.resetMetricsNow();},[]()->uint64_t{return diagnosticService.windowUs();});
+  diagnosticService.startWindow();
 }
 
 void loop() {
-  tickConnectivity();
-  if (scheduler.due(uint32_t(millis()))) {
+  if(dashboardNetworkAllowed())tickConnectivity();
+  if (dashboardImuAllowed() && scheduler.due(uint32_t(millis()))) {
     const uint64_t acquireStart = monotonicClock.nowUs();
     if (imuManager.acquire()) {
       const uint64_t start = monotonicClock.nowUs();
@@ -58,6 +62,7 @@ void loop() {
       d.sent(monotonicClock.nowUs() - start);
     }
   }
-  pollOscRuntime();
+  if(dashboardImuAllowed())pollOscRuntime();
   usbDiagnostics.poll(Serial, uint32_t(millis()));
+  tickDashboard(scheduler.remaining(uint32_t(millis()))>=3);
 }

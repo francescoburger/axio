@@ -37,6 +37,12 @@ class BnoDevice {
     Serial.println("# BNO055 initialized successfully.");
     return true;
   }
+  bool powerWrite(uint8_t reg,uint8_t value) {
+    uint8_t bytes[2]={reg,value};return bus.write(bytes,sizeof(bytes));
+  }
+  bool powerRead(uint8_t reg,uint8_t &value) {
+    return bus.write_then_read(&reg,1,&value,1);
+  }
   bool readQuaternion(imu::Quaternion &result) {
     uint8_t reg = Adafruit_BNO055::BNO055_QUATERNION_DATA_W_LSB_ADDR;
     uint8_t bytes[8];

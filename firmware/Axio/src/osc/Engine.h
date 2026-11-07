@@ -32,17 +32,33 @@ template<class Network> class Engine {
     sequence=sample.sequence;
     bool due[MaxMessages]={};
     for(unsigned i=0;i<config.messageCount;++i) {
-      uint64_t period=(1000000u+config.messages[i].hz-1)/config.messages[i].hz;
+      uint64_t period=config.schema==2 ? uint64_t(config.messages[i].intervalMs)*1000u :
+        (1000000u+config.messages[i].hz-1)/config.messages[i].hz;
       // At the core's nominal 100 Hz ceiling, every fresh snapshot is due.
       // Gating completion timestamps again can discard samples on tiny I2C
       // jitter even though their acquisition starts obey the 10 ms scheduler.
-      if(config.messages[i].hz==100 || now>=last[i]) {
+      if((config.schema==1 && config.messages[i].hz==100) || now>=last[i]) {
         last[i]=(last[i] && now-last[i]<period)?last[i]+period:now+period;
         due[i]=true;
         ++metrics.schedules[i];
       }
     }
     for(unsigned r=0;r<config.destCount;++r) {
+      if(config.schema==2) {
+        unsigned count=0;
+        for(unsigned i=0;i<config.messageCount;++i)if(due[i])++count;
+        if(!count)continue;
+        packet.size=0;if(count>1)packet.bundle();
+        for(unsigned i=0;i<config.messageCount;++i)if(due[i]) {
+          if(count>1)packet.integer(messageSize(config.messages[i],config.id));
+          packet.message(config.messages[i],config,sample);
+        }
+        bool ok=emit(r,packet.data,packet.size);
+        for(unsigned i=0;i<config.messageCount;++i)if(due[i]) {
+          ++metrics.messageAttempts[i];if(ok)++metrics.messageQueued[i];++metrics.messages;
+        }
+        continue;
+      }
       packet.size=0; bool bundled=false;
       for(unsigned i=0;i<config.messageCount;++i)if(due[i] && config.messages[i].bundle && (config.messages[i].routes&(1u<<r))) {
         if(!bundled) {packet.bundle();bundled=true;}

@@ -1,5 +1,16 @@
 # Axio
 
+**Fase 4:** dashboard LAN inglese con cinque schermate, editor OSC unico a
+intervalli ms, batteria A0/GPIO2 e controlli di alimentazione. Build installata
+e collaudata sulle XIAO disponibili; risultati e limiti in
+[verifiche Fase 4](docs/phase4-verification.md).
+`axio.local` resta disabilitato: il probe su due dispositivi ha osservato due
+risposte A contemporanee. [Evidenza e proposta](docs/phase4-mdns-decision.md).
+Nessun commit o push di questa implementazione; accettazione visiva ancora da
+esprimere rispetto alle catture in `captures/phase4-device-ui/`.
+
+## Stato storico Fase 3
+
 Fase 3, **Checkpoint 3D: collaudo eseguito con limiti documentati, in attesa di approvazione**: STA multi-rete, fallback AP WPA2 dopo
 15 secondi e provisioning minimo su AP. Password AP fissa `12345678`,
 richiesta esplicitamente; SSID leggibile con `AP CREDENTIALS` via USB.

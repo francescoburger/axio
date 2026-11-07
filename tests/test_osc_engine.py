@@ -46,6 +46,66 @@ class EngineTests(unittest.TestCase):
                 p=self.validate(preset(name))
                 self.assertEqual(p.returncode,0,p.stdout)
 
+    def modern(self):
+        row=preset('Motion')
+        row['schema']=2
+        del row['preset']
+        for m in row['messages']:
+            m['interval_ms']=13
+            for key in ('hz','bundle','destinations'): del m[key]
+        return row
+
+    def test_interval_ms_auto_bundle_migration_and_atomic_upgrade(self):
+        output=subprocess.check_output([str(self.binary),'--phase4'],text=True)
+        self.assertEqual(output.strip(),'PASS phase4')
+
+    def test_schema2_roundtrip_strict_validation(self):
+        row=self.modern()
+        result=self.validate(row)
+        self.assertEqual(result.returncode,0,result.stdout)
+        self.assertEqual(json.loads(result.stdout),row)
+        for value in (0,9,65536,-1,10.5,'13',True,None):
+            bad=copy.deepcopy(row);bad['messages'][0]['interval_ms']=value
+            with self.subTest(value=value):self.assertNotEqual(self.validate(bad).returncode,0)
+        for key,value in [('hz',100),('bundle',True),('destinations',[0])]:
+            bad=copy.deepcopy(row);bad['messages'][0][key]=value
+            with self.subTest(key=key):self.assertNotEqual(self.validate(bad).returncode,0)
+        bad=copy.deepcopy(row);bad['preset']='Motion'
+        self.assertNotEqual(self.validate(bad).returncode,0)
+        for interval in (10,11,13,30,65535):
+            row['messages'][0]['interval_ms']=interval
+            self.assertEqual(self.validate(row).returncode,0)
+        # Schema 2 must budget all messages together, regardless of legacy bundle flags.
+        row['messages']=[dict(address='/large/'+str(i),interval_ms=10,
+                             fields=['q0']*16) for i in range(16)]
+        self.assertEqual(self.validate(row).stdout.strip(),'packet_too_large')
+
+    def test_single_editor_schema_roundtrip_and_group_validation(self):
+        row=self.modern();del row['messages']
+        row['editor']=dict(main_address='/motion/{id}',interval_ms=13,
+                           suffixes=['','real','world','gyro',''],selected=[7,7,7,7,15])
+        result=self.validate(row)
+        self.assertEqual(result.returncode,0,result.stdout)
+        self.assertEqual(json.loads(result.stdout),row)
+        for key,value in [('selected',[0,0,0,0,0]),('selected',[8,7,7,7,15]),
+                          ('suffixes',['/bad','','','','']),('interval_ms',9)]:
+            invalid=copy.deepcopy(row);invalid['editor'][key]=value
+            with self.subTest(key=key,value=value):self.assertNotEqual(self.validate(invalid).returncode,0)
+        for fields in ('main_address','suffixes','selected','interval_ms'):
+            invalid=copy.deepcopy(row);del invalid['editor'][fields]
+            self.assertNotEqual(self.validate(invalid).returncode,0)
+
+    def test_schema2_runtime_validate_apply_and_reboot(self):
+        row=self.modern();wire=json.dumps(row,separators=(',',':'))
+        commands=['AXIO 1 CONFIG GET','AXIO 2 CONFIG VALIDATE '+wire,
+                  'AXIO 3 CONFIG GET','AXIO 4 CONFIG APPLY '+wire,
+                  '@REBOOT','AXIO 5 CONFIG GET']
+        rows=[json.loads(line) for line in subprocess.check_output(
+            [str(self.runtime)],input='\n'.join(commands)+'\n',text=True).splitlines()]
+        self.assertTrue(all(r['ok'] for r in rows),rows)
+        self.assertEqual(rows[0]['data'],rows[2]['data'])
+        self.assertEqual(rows[-1]['data'],row)
+
     def test_invalid_configuration(self):
         original=preset()
         variants=[]
