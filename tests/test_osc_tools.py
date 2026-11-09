@@ -84,11 +84,11 @@ class OSCReceiverTests(unittest.TestCase):
                                      '--output',str(output)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
             try:
                 ready, _, _ = select.select([proc.stdout],[],[],5)
-                self.assertTrue(ready, 'receiver non pronto entro 5 secondi')
+                self.assertTrue(ready, 'Receiver not ready within 5 seconds')
                 line = proc.stdout.readline().strip()
                 if not line.startswith('Listening on '):
                     _, err = proc.communicate(timeout=5)
-                    self.fail('receiver non avviato: '+err)
+                    self.fail('Receiver did not start: '+err)
                 port = int(line.rsplit(':',1)[1])
                 with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as sock:
                     sock.sendto(bundle(message()),('127.0.0.1',port))

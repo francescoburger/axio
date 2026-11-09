@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Controlla versioni installate, senza installare o aggiornare nulla."""
+"""Check installed versions without installing or updating anything."""
 import json
 from pathlib import Path
 import subprocess
@@ -24,7 +24,7 @@ def main():
     failed = False
     for name, actual, expected in checks:
         ok = actual == expected
-        print(f'{"PASS" if ok else "FAIL"}: {name}: {actual or "assente"} (richiesto {expected})')
+        print(f'{"PASS" if ok else "FAIL"}: {name}: {actual or "missing"} (required {expected})')
         failed |= not ok
     build = ROOT/'.build'
     build.mkdir(exist_ok=True)

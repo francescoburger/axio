@@ -5,7 +5,7 @@
 #include <vector>
 #include <utility/imumaths.h>
 
-// Solo adattatori hardware/trasporto; la matematica viene estratta dallo sketch.
+// Hardware/transport adapters only; mathematics is extracted from the sketch.
 struct Adafruit_BNO055 {
   enum { VECTOR_EULER, VECTOR_LINEARACCEL, VECTOR_GYROSCOPE };
   imu::Quaternion quat;

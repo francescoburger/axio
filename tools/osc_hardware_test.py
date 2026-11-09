@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verifica OSC reale dalla XIAO; non applica configurazioni. Calibra solo con --calibrate."""
+"""Check real OSC from the XIAO; does not apply settings. Calibrates only with --calibrate."""
 import argparse
 import json
 import math
@@ -22,13 +22,13 @@ def osc_string(value):
 def check_message(message, definition, device_id):
     expected=definition['address'].replace('{id}',device_id)
     if message['address']!=expected:
-        raise ValueError('indirizzo inatteso: '+message['address'])
+        raise ValueError('Unexpected address: '+message['address'])
     if message['types']!=','+'f'*len(definition['fields']):
-        raise ValueError('tipi/numero argomenti inattesi')
+        raise ValueError('Unexpected argument types/count')
     if bool(message['bundle_timetags'])!=definition['bundle']:
-        raise ValueError('bundle inatteso')
+        raise ValueError('Unexpected bundle')
     if not all(isinstance(v,(int,float)) and math.isfinite(v) for v in message['values']):
-        raise ValueError('valore OSC non finito')
+        raise ValueError('Nonfinite OSC value')
     # Nominal ranges are deliberately not clamped or rejected.
 
 
@@ -38,18 +38,18 @@ def main():
     p.add_argument('--tracker-ip',required=True)
     p.add_argument('--bind',default='0.0.0.0')
     p.add_argument('--duration',type=float,default=10)
-    p.add_argument('--serial-port',help='opzionale: legge CONFIG GET e METRICS prima/dopo')
-    p.add_argument('--calibrate','--tare',dest='calibrate',action='store_true',help='MODIFICA riferimenti RAM; richiede ACK abilitato (--tare: alias precedente)')
+    p.add_argument('--serial-port',help='Optional: read CONFIG GET and METRICS before/after')
+    p.add_argument('--calibrate','--tare',dest='calibrate',action='store_true',help='CHANGES RAM references; requires enabled ACK (--tare: legacy alias)')
     p.add_argument('--report',type=Path,required=True)
     a=p.parse_args()
     if not math.isfinite(a.duration) or a.duration<=0:
-        p.error('durata deve essere positiva e finita')
+        p.error('Duration must be positive and finite')
     if a.report.exists():
-        p.error('report già esistente: scegliere un nome nuovo')
+        p.error('Report already exists: choose a new name')
     try:config=normalize_calibration(json.loads(a.config.read_text()))
     except ValueError as exc:p.error(str(exc))
     if a.calibrate and not config['ack']['enabled']:
-        p.error('--calibrate richiede ACK abilitato nella configurazione già applicata')
+        p.error('--calibrate requires enabled ACK in the already applied configuration')
     report=dict(schema=1,tests=[],hardware_executed=False,calibration_requested=a.calibrate,configuration_changed=False)
     def record(name,result,detail):
         report['tests'].append(dict(name=name,result=result,detail=detail))
@@ -94,11 +94,11 @@ def main():
                         ack_port=config['destinations'][ack['destination']]['port']
                         if a.calibrate and port==ack_port and m['address']==ack['address'].replace('{id}',config['id']):
                             if m['types']!=',i' or m['values']!=[1]:
-                                raise ValueError('ACK non valido')
+                                raise ValueError('Invalid ACK')
                             ack_count+=1
                         else:
                             if key not in expected:
-                                raise ValueError('routing/indirizzo inatteso: '+str(key))
+                                raise ValueError('Unexpected routing/address: '+str(key))
                             check_message(m,expected[key],config['id']);counts[key]+=1
                 except (OSCError,ValueError) as exc:
                     row['error']=str(exc)

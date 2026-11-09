@@ -1,4 +1,4 @@
-"""Esegue le funzioni C++ originali estratte, contro un oracolo Python separato."""
+"""Run extracted original C++ functions against an independent Python oracle."""
 import hashlib
 import math
 import os
@@ -18,7 +18,7 @@ def f32(x):
 
 
 def cpp_remainder(n, d):
-    # Python % non replica il resto C++ per numeratori negativi.
+    # Python % does not reproduce C++ remainder for negative numerators.
     return n - math.trunc(n / d) * d
 
 
@@ -35,7 +35,7 @@ def reference(v):
     pitch = f32(int(v[12])/90.0)
     roll = f32((-1*int(v[13]))/180.0)
     acc = list(map(f32, v[14:17]))
-    # Ogni prodotto/somma della matrice originale è float, da sinistra a destra.
+    # Each original matrix product/sum is float, evaluated left to right.
     mul = lambda a, b: f32(a*b)
     add = lambda a, b: f32(a+b)
     sub = lambda a, b: f32(a-b)
@@ -73,9 +73,9 @@ class BaselineTests(unittest.TestCase):
 
     def test_original_cpp_against_reference(self):
         compiler = shutil.which(os.environ.get('CXX', 'c++'))
-        self.assertIsNotNone(compiler, 'installare prima gli strumenti C++ macOS')
+        self.assertIsNotNone(compiler, 'Install the macOS C++ tools first')
         library = Path(os.environ.get('BNO055_LIBRARY', str(Path.home()/'Documents/Arduino/libraries/Adafruit_BNO055')))
-        self.assertTrue((library/'utility/imumaths.h').is_file(), 'impostare BNO055_LIBRARY alla libreria Adafruit BNO055 1.6.4')
+        self.assertTrue((library/'utility/imumaths.h').is_file(), 'Set BNO055_LIBRARY to the Adafruit BNO055 1.6.4 library')
         source = (ROOT/'reference/HandTrackerV1_1.ino').read_text()
         globals_ = source[source.index('float q0,'):source.index('WiFiUDP UDP;')]
         functions = '\n'.join(extract(source, name) for name in ('calibrateReference','osctare','computeWorldAccel','bno_loop'))
@@ -87,12 +87,12 @@ class BaselineTests(unittest.TestCase):
         cases = []
         def case(tare=0, yaw=0, pitch=0, roll=0, gyro=(0,0,0), quat=(1,0,0,0), origin=(1,0,0,0), acc=(0,0,0)):
             return [*origin,tare,0,0,*quat,yaw,pitch,roll,*acc,*gyro]
-        # Tutti i gradi dello yaw, entrambi i lati del wrap e tarature frazionarie.
+        # Every yaw degree, both sides of wrap and fractional references.
         for offset in (0, 179.9375, 359.9375):
             cases.extend(case(tare=offset, yaw=degree+.9375) for degree in range(360))
         for value in (-900.75,-180.99,-90.99,-1.99,-.99,0,.99,1.99,90.99,180.99,900.75):
             cases.append(case(tare=359.9,yaw=value,pitch=value,roll=value,gyro=(value,-value,.99),acc=(70,-70,35)))
-        # Ordine non commutativo, quaternion non unitari, segno q/-q e tarature ripetute.
+        # Noncommutative order, nonunit quaternions, q/-q sign and repeated calibration.
         cases += [case(origin=(2,0,0,0),quat=(2,0,0,0)),
                   case(origin=(.5,.5,.5,.5),quat=(.5,-.5,.5,-.5),acc=(35,0,0)),
                   case(quat=(0,0,0,1),acc=(35,0,0)),
@@ -122,7 +122,7 @@ class BaselineTests(unittest.TestCase):
                 self.assertEqual(len(actual), len(expected))
                 for column, (a,b) in enumerate(zip(actual,expected)):
                     self.assertAlmostEqual(a,b,delta=max(1e-7, abs(b)*2e-6),msg=f'case {i}, column {column}')
-        print(f'PASS: {len(cases)} vettori, baseline/core vs oracolo; output host baseline/core identico')
+        print(f'PASS: {len(cases)} vectors, baseline/core vs oracle; identical baseline/core host output')
 
     def test_known_edges(self):
         base = [1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0]
@@ -134,9 +134,9 @@ class BaselineTests(unittest.TestCase):
         base[11] = -900
         self.assertEqual(reference(base)[9], -1)  # -360 % 360 == 0
         base[11] = -901
-        self.assertLess(reference(base)[9], -1)  # resto C++ negativo
+        self.assertLess(reference(base)[9], -1)  # Negative C++ remainder
         base[0] = base[7] = 2
-        self.assertEqual(reference(base)[5], 4)  # coniugato, nessuna inversa/normalizzazione
+        self.assertEqual(reference(base)[5], 4)  # Conjugate, no inverse/normalization
 
 
 if __name__ == '__main__':

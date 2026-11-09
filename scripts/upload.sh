@@ -1,10 +1,10 @@
 #!/bin/bash
-# Azione esplicita separata dai test. Non cancella NVS né installa dipendenze.
+# Explicit action, separate from tests. Does not erase NVS or install dependencies.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 if [[ $# -ne 2 || "$1" != '--port' || -z "$2" ]]; then
-  echo 'Uso: bash scripts/upload.sh --port /dev/cu.usbmodem... (compila e carica)' >&2
+  echo 'Usage: bash scripts/upload.sh --port /dev/cu.usbmodem... (builds and uploads)' >&2
   exit 2
 fi
 PORT="$2"

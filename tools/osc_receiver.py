@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""OSC UDP -> JSONL, sola standard library. Un record per datagramma."""
+"""OSC UDP to JSONL using only the standard library. One record per datagram."""
 import argparse
 import base64
 import json
@@ -16,13 +16,13 @@ class OSCError(ValueError):
 
 def decode_packet(data, depth=0, timetags=()):
     if depth > 16 or not data or len(data) % 4:
-        raise OSCError('dimensione/allineamento OSC o profondità non valida')
+        raise OSCError('Invalid OSC size/alignment or depth')
     pos = 0
 
     def take(n):
         nonlocal pos
         if n < 0 or pos + n > len(data):
-            raise OSCError('pacchetto troncato')
+            raise OSCError('Truncated packet')
         value = data[pos:pos + n]
         pos += n
         return value
@@ -31,19 +31,19 @@ def decode_packet(data, depth=0, timetags=()):
         nonlocal pos
         end = data.find(b'\0', pos)
         if end < 0:
-            raise OSCError('stringa non terminata')
+            raise OSCError('Unterminated string')
         raw = take(end - pos)
         padding = take(4 - len(raw) % 4)
         if any(padding):
-            raise OSCError('padding stringa non nullo')
+            raise OSCError('Nonzero string padding')
         try:
             return raw.decode('utf-8')
         except UnicodeDecodeError as exc:
-            raise OSCError('UTF-8 non valido') from exc
+            raise OSCError('Invalid UTF-8') from exc
 
     def number(fmt):
         value = struct.unpack('>' + fmt, take(struct.calcsize('>' + fmt)))[0]
-        # JSON valido anche per float OSC NaN/Inf; il type tag resta disponibile.
+        # Keep JSON valid for OSC NaN/Inf floats; the type tag remains available.
         return str(value) if isinstance(value, float) and not math.isfinite(value) else value
 
     if data.startswith(b'#bundle\0'):
@@ -53,13 +53,13 @@ def decode_packet(data, depth=0, timetags=()):
         while pos < len(data):
             size = number('i')
             if size <= 0:
-                raise OSCError('dimensione elemento bundle non valida')
+                raise OSCError('Invalid bundle element size')
             result.extend(decode_packet(take(size), depth + 1, timetags + (tag,)))
         return result
     address = string()
     tags = string()
     if not address.startswith('/') or not tags.startswith(','):
-        raise OSCError('indirizzo o type tag OSC non valido')
+        raise OSCError('Invalid OSC address or type tag')
     values = []
     for tag in tags[1:]:
         if tag in 'ifhd':
@@ -70,14 +70,14 @@ def decode_packet(data, depth=0, timetags=()):
             size = number('i')
             blob = take(size)
             if any(take((-size) % 4)):
-                raise OSCError('padding blob non nullo')
+                raise OSCError('Nonzero blob padding')
             values.append({'base64': base64.b64encode(blob).decode('ascii')})
         elif tag in 'TFNI':
             values.append({'T': True, 'F': False, 'N': None, 'I': 'impulse'}[tag])
         else:
-            raise OSCError('type tag non supportato: ' + tag)
+            raise OSCError('Unsupported type tag: ' + tag)
     if pos != len(data):
-        raise OSCError('byte residui nel messaggio')
+        raise OSCError('Trailing bytes in message')
     return [{'address': address, 'types': tags, 'values': values,
              'bundle_timetags': list(timetags)}]
 
@@ -87,12 +87,12 @@ def main():
     parser.add_argument('--bind', default='0.0.0.0')
     parser.add_argument('--port', type=int, default=16888)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--duration', type=float, default=0, help='secondi; 0 fino a Ctrl-C')
+    parser.add_argument('--duration', type=float, default=0, help='Seconds; 0 runs until Ctrl-C')
     args = parser.parse_args()
     if not 0 <= args.port <= 65535 or args.duration < 0:
-        parser.error('porta o durata non valida')
+        parser.error('Invalid port or duration')
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    # Non sovrascrivere catture precedenti.
+    # Do not overwrite previous captures.
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.bind((args.bind, args.port))
         sock.settimeout(0.2)
@@ -120,7 +120,7 @@ def main():
                     output.flush()
             except KeyboardInterrupt:
                 pass
-            print('Datagrammi registrati: {}'.format(count))
+            print('Datagrams recorded: {}'.format(count))
 
 
 if __name__ == '__main__':

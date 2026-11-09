@@ -231,8 +231,8 @@ def main():
         atomic_json(args.run_dir / 'status.json', value)
         summary = args.run_dir / 'summary.md'
         if not summary.exists():
-            summary.write_text('# Axio — endurance in corso\n\nNessun risultato finale disponibile.\n'
-                               'Lo stato aggiornato è in status.json; questo file sarà sostituito dal rapporto al termine.\n')
+            summary.write_text('# Axio — endurance in progress\n\nNo final result available.\n'
+                               'Current state is in status.json; the final report will replace this file.\n')
 
     try:
         import serial

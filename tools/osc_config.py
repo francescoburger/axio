@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Payload schema 1 e comandi USB; APPLY persistente richiede --apply esplicito."""
+"""Schema 1 payloads and USB commands; persistent APPLY requires explicit --apply."""
 import argparse
 import json
 from pathlib import Path
@@ -12,7 +12,7 @@ def normalize_calibration(config):
     result=dict(config)
     if 'tare_address' in result:
         if 'calibration_address' in result:
-            raise ValueError('chiavi calibrazione duplicate')
+            raise ValueError('Duplicate calibration keys')
         result['calibration_address']=result.pop('tare_address')
     return result
 
@@ -41,22 +41,22 @@ def main():
     p.add_argument('--ip', default='127.0.0.1')
     p.add_argument('--udp-port', type=int, default=16888)
     p.add_argument('--id', default='0')
-    p.add_argument('--timeout', type=float, default=10, help='include eventuale scrittura NVS')
+    p.add_argument('--timeout', type=float, default=10, help='Includes any NVS write')
     a = p.parse_args()
     if a.preset:
         print(json.dumps(preset(a.preset,a.ip,a.udp_port,a.id),separators=(',',':')))
         return 0
     if not a.port:
-        p.error('--port obbligatoria per comandi USB')
+        p.error('--port is required for USB commands')
     if a.timeout<=0:
-        p.error('timeout deve essere positivo')
+        p.error('Timeout must be positive')
     try:
         import serial
         command = 'CONFIG GET'
         if a.validate or a.apply:
             path=a.validate or a.apply
             if path.stat().st_size>7168:
-                raise ProtocolError('configurazione oltre 7168 byte')
+                raise ProtocolError('Configuration exceeds 7168 bytes')
             document=json.loads(path.read_text())
             command=('CONFIG APPLY ' if a.apply else 'CONFIG VALIDATE ')+json.dumps(document,ensure_ascii=True,separators=(',',':'),allow_nan=False)
         with serial.Serial(a.port,115200,timeout=.05,write_timeout=2,exclusive=True) as port:

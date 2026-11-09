@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Statistiche di ricezione UDP per sorgente; nessuna stima della frequenza IMU."""
+"""UDP reception statistics by source; no IMU rate estimate."""
 import argparse
 import collections
 import json
@@ -16,7 +16,7 @@ def summarize(records):
         times = [r['received_monotonic_ns'] for r in rows]
         dt = [(b - a) / 1e6 for a, b in zip(times, times[1:])]
         if any(d < 0 for d in dt):
-            raise ValueError('timestamp non monotoni nella cattura')
+            raise ValueError('Nonmonotonic timestamps in capture')
         span = (times[-1] - times[0]) / 1e9
         osc_times = [r['received_monotonic_ns'] for r in rows if 'messages' in r]
         osc_span = (osc_times[-1] - osc_times[0]) / 1e9 if osc_times else 0
