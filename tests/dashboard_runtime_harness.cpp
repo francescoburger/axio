@@ -10,6 +10,7 @@
 #include "WiFiUdp.h"
 #include "Preferences.h"
 #include "esp_wifi.h"
+#include "mdns.h"
 #include "src/core/BnoDevice.h"
 #include "src/core/TrackerState.h"
 #include "src/connectivity/ConnectivityRuntime.h"
@@ -55,6 +56,8 @@ int main(int argc,char **argv){
       if(command=="OK_NVS")failNvs=false;
       if(command=="FAIL_AP_STOP")WiFi.failApStop=true;
       if(command=="OK_AP_STOP")WiFi.failApStop=false;
+      if(command=="ENTRY_RUN")for(unsigned i=0;i<2000;++i){clockOffset+=10;fakeMillis()+=10;tickConnectivity();}
+      if(command=="ENTRY_CONFLICT")fakeMdns().hostname="axio-2";
     }
     if(testButton){fakeDeviceControl().button=elapsed>=300&&elapsed<3500?0:1;WiFi.link=0;}
     else if(apMode)WiFi.link=0;

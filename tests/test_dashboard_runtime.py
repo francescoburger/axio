@@ -49,6 +49,22 @@ class DashboardHttpCase:
         self.fail('Runtime transition timed out: '+repr(last))
 
 class DashboardRuntimeTests(DashboardHttpCase,unittest.TestCase):
+    def test_common_host_origin_and_token_only_accepted_by_current_owner(self):
+        common={'Host':'axio.local:17884','Origin':'http://axio.local:17884'}
+        self.assertEqual(self.request('GET','/api/session',headers=common)[0],403)
+        self.radio('ENTRY_RUN')
+        owner=self.wait_snapshot(lambda s:s['network']['entry_state']=='leader')
+        self.assertEqual(owner['network']['entry_point'],'axio.local')
+        self.assertEqual(owner['device']['hostname'],'axio-123456789abc.local')
+        self.assertEqual(self.request('GET','/api/session',headers=common)[0],200)
+        self.assertEqual(self.post('/api/osc/validate',owner['osc'],common)[0],200)
+        self.assertEqual(self.post('/api/osc/validate',owner['osc'],dict(common,Origin='http://wrong.local'))[0],403)
+        self.assertEqual(self.post('/api/osc/validate',owner['osc'],dict(common,**{'X-Axio-Token':'bad'}))[0],403)
+        self.radio('ENTRY_CONFLICT')
+        self.wait_snapshot(lambda s:s['network']['entry_state']!='leader')
+        self.assertEqual(self.request('GET','/api/session',headers=common)[0],403)
+        self.assertEqual(self.get('/api/session')[0],200)
+
     def test_old_osc_key_is_read_and_canonicalized_without_changing_endpoints(self):
         original=self.snapshot()['osc'];old=copy.deepcopy(original)
         del old['calibration_address'];old['tare_address']='/tare'

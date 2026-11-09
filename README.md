@@ -1,5 +1,10 @@
 # Axio
 
+**Aggiornamento mDNS (9 novembre 2026):** `http://axio.local` integrato con
+elezione automatica e subentro, verificati sulle due XIAO. Hostname individuali,
+reti e impostazioni OSC conservati; principale con IMU, secondaria senza IMU.
+[Verifiche e limiti del punto d'accesso comune](docs/phase4-entry-point-verification.md).
+
 **Aggiornamento UI (9 novembre 2026):** icona OSC viola, logo XYZ e solo Axio
 nell'header, vista Motion isometrica con assi che ruotano insieme al box
 (yaw su Y, pitch su X, roll su Z). Aggiornamento
@@ -16,15 +21,18 @@ Revisione caricata sulla XIAO principale, impostazioni conservate.
 rimosso da tutte le schermate, stile Messages, terminologia Calibration e
 dashboard completa anche in AP. Revisione caricata sulla XIAO principale
 AC:27:6E:7E:32:38, con configurazioni conservate e verifiche USB/STA/browser;
-AP fisico ancora NOT RUN. Compatibilità e limiti in
+Dashboard su AP reale: PASS manuale riferito dall'utente il 9 novembre 2026;
+provisioning e passaggio AP→STA non confermati da questa prova. Compatibilità e limiti in
 [correzioni dashboard](docs/debug-corrections-verification.md).
 
 **Fase 4:** dashboard LAN inglese con cinque schermate, editor OSC unico a
 intervalli ms, batteria A0/GPIO2 e controlli di alimentazione. Build installata
 e collaudata sulle XIAO disponibili; risultati e limiti in
 [verifiche Fase 4](docs/phase4-verification.md).
-`axio.local` resta disabilitato: il probe su due dispositivi ha osservato due
-risposte A contemporanee. [Evidenza e proposta](docs/phase4-mdns-decision.md).
+`axio.local` ora usa il probing nativo nello stesso responder e conserva i nomi
+individuali. [Implementazione e collaudo](docs/phase4-entry-point-verification.md).
+La precedente scorciatoia con nome comune delegato rimane documentata come
+prova fallita in [evidenza storica mDNS](docs/phase4-mdns-decision.md).
 Nessun commit o push di questa implementazione; accettazione visiva ancora da
 esprimere rispetto alle catture in `captures/phase4-device-ui/`.
 

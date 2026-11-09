@@ -1,6 +1,12 @@
 # Fase 4 — nome comune: evidenza e proposta di verifica
 
-Il nome comune **non è attivo nella build Axio consegnata**. Non è stata
+**Rapporto storico del primo probe.** Il 9 novembre 2026 è stata implementata
+e verificata una soluzione diversa, con nome comune nativo e identità individuale
+delegata nello stesso responder, senza patch al framework. Risultati e limiti
+in [phase4-entry-point-verification.md](phase4-entry-point-verification.md).
+I risultati FAIL sotto restano evidenza della scorciatoia precedente.
+
+Il nome comune **non era attivo nella build Axio di questa prima consegna**. Non è stata
 simulata un'elezione o una risoluzione `axio.local`. Gli hostname individuali
 restano operativi. Questo documento applica il punto di stop richiesto dalla
 specifica, senza trasformare un requisito mancante in una funzione completata.

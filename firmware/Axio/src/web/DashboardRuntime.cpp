@@ -69,7 +69,10 @@ struct Platform {
     char literal[96],local[80];auto address=boundAp?WiFi.softAPIP():WiFi.localIP();
     snprintf(literal,sizeof(literal),"%u.%u.%u.%u",address[0],address[1],address[2],address[3]);
     snprintf(local,sizeof(local),"%s.local",discoveryHostname());
-    for(const char *allowed:{literal,local}){
+    const char *common=discoveryEntryOwned()?"axio.local":"";
+    const char *names[]={literal,local,common};
+    for(const char *allowed:names){
+      if(!*allowed||(boundAp&&allowed==common))continue;
       if(boundAp&&allowed==local)continue; // mDNS is a STA service only.
       size_t n=strlen(allowed);if(!strcasecmp(name,allowed))return true;
       char port[12];snprintf(port,sizeof(port),":%u",unsigned(AXIO_DASHBOARD_HTTP_PORT));
@@ -118,7 +121,7 @@ struct Platform {
     wifi_config_t radio={};esp_wifi_get_config(WIFI_IF_STA,&radio);char ssid[33]={};memcpy(ssid,radio.sta.ssid,32);w.quote(connected?ssid:"");
     w.add(",\"ip\":");ip(w,boundAp?WiFi.softAPIP():WiFi.localIP());w.add(",\"gateway\":");if(connected)ip(w,WiFi.gatewayIP());else w.add("null");w.add(",\"subnet\":");if(connected)ip(w,WiFi.subnetMask());else w.add("null");
     if(connected)w.add(",\"rssi\":%d",WiFi.RSSI());else w.add(",\"rssi\":null");
-    w.add(",\"entry_point\":null,\"entry_state\":\"unverified\",\"ap_ip\":");ip(w,apActive?WiFi.softAPIP():IPAddress(192,168,4,1));w.add(",\"networks\":[");
+    w.add(",\"entry_point\":%s,\"entry_state\":\"%s\",\"ap_ip\":",discoveryEntryAvailable()?"\"axio.local\"":"null",discoveryEntryState());ip(w,apActive?WiFi.softAPIP():IPAddress(192,168,4,1));w.add(",\"networks\":[");
     const auto &networks=dashboardNetworks();unsigned order[8]={};
     for(unsigned i=0;i<networks.count;++i){order[i]=i;for(unsigned j=i;j&&networks.networks[order[j]].priority>networks.networks[order[j-1]].priority;--j){unsigned t=order[j];order[j]=order[j-1];order[j-1]=t;}}
     for(unsigned i=0;i<networks.count;++i){const auto &n=networks.networks[order[i]];w.add("%s{\"original\":%u,\"ssid_hex\":\"",i?",":"",order[i]);for(const unsigned char *p=reinterpret_cast<const unsigned char *>(n.ssid);*p;++p)w.add("%02x",*p);w.add("\"}");}

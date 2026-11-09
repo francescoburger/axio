@@ -5,6 +5,9 @@ void setupDiscoveryIdentity();
 void tickDiscovery(bool sta);
 const char *discoveryHostname();
 const char *discoveryState();
+const char *discoveryEntryState();
+bool discoveryEntryOwned();
+bool discoveryEntryAvailable();
 void discoveryJson(char *out,size_t cap);
 bool discoveryCommand(const char *id,char *command,char *out);
 

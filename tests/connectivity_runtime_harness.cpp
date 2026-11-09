@@ -8,6 +8,7 @@
 #include "esp_timer.h"
 #include "mdns.h"
 #include "src/connectivity/ConnectivityRuntime.h"
+#include "src/connectivity/DiscoveryRuntime.h"
 #include "src/transport/OscRuntime.h"
 FakeWiFi WiFi;
 std::map<std::string,std::vector<uint8_t>> fakeNvs;
@@ -31,6 +32,13 @@ int main(){
   axio::SerialProtocol protocol;char out[axio::SerialProtocol::MaxReply];std::string line;
   axio::Sample sample;sample.valid=true;
   while(std::getline(std::cin,line)) {
+    if(line=="@ENTRY_ENABLE"){setDiscoveryTrackerId("test");continue;}
+    if(line=="@ENTRY_OWNER"){fakeMdns().entryOwner=true;continue;}
+    if(line=="@ENTRY_NO_OWNER"){fakeMdns().entryOwner=false;continue;}
+    if(line=="@ENTRY_SMALLER"){fakeMdns().entrySmaller=true;continue;}
+    if(line=="@ENTRY_ALIAS_FAIL"){fakeMdns().failAlias=true;continue;}
+    if(line=="@ENTRY_CONFLICT"){fakeMdns().hostname="axio-2";fakeMillis()+=100;tickConnectivity();continue;}
+    if(line=="@ENTRY_RUN"){for(unsigned i=0;i<2000;++i){fakeMillis()+=10;tickConnectivity();}continue;}
     if(line=="@DOWN"){WiFi.link=0;tickConnectivity();pollOscRuntime();assert(fakeUdp().bound.empty());continue;}
     if(line=="@UP"){WiFi.link=WL_CONNECTED;tickConnectivity();pollOscRuntime();assert(fakeUdp().bound.size()==(fakeUdp().failAll?0:1));continue;}
     if(line=="@IP"){WiFi.ip=IPAddress(192,168,1,20);tickConnectivity();pollOscRuntime();assert(fakeUdp().bound.size()==1);assert(fakeUdp().bound.begin()->second==uint32_t(WiFi.ip));continue;}

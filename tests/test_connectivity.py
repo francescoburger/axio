@@ -170,6 +170,38 @@ class ConnectivityTests(unittest.TestCase):
         self.assertEqual(rows[3]['data']['peers'],[])
         self.assertNotIn('password',json.dumps(rows))
 
+    def test_entry_runtime_elects_native_owner_and_withdraws_on_conflict(self):
+        rows=self.commands(['@ENTRY_ENABLE','@UP','@ENTRY_RUN','AXIO 1 STATUS',
+                            '@ENTRY_CONFLICT','@TICK','AXIO 2 STATUS',
+                            '@DOWN','AXIO 3 STATUS'])
+        first=rows[0]['data']['connectivity']
+        self.assertEqual(first['mdns_hostname'],'axio-123456789abc')
+        self.assertEqual(first['discovery_details']['entry_state'],'leader')
+        self.assertTrue(first['discovery_details']['entry_owned'])
+        second=rows[1]['data']['connectivity']['discovery_details']
+        self.assertFalse(second['entry_owned']);self.assertEqual(second['entry_conflicts'],1)
+        self.assertEqual(rows[2]['data']['connectivity']['discovery_details']['entry_state'],'offline')
+
+    def test_entry_runtime_retains_live_owner_and_defers_to_smaller_candidate(self):
+        for mode in ('@ENTRY_OWNER','@ENTRY_SMALLER'):
+            rows=self.commands(['@ENTRY_ENABLE',mode,'@UP','@ENTRY_RUN','AXIO 1 STATUS'])
+            entry=rows[0]['data']['connectivity']['discovery_details']
+            self.assertFalse(entry['entry_owned']);self.assertGreater(entry['entry_queries'],1)
+            self.assertNotEqual(entry['entry_state'],'leader')
+
+    def test_entry_runtime_failed_alias_never_reports_ownership(self):
+        rows=self.commands(['@ENTRY_ENABLE','@ENTRY_ALIAS_FAIL','@UP','@ENTRY_RUN','AXIO 1 STATUS'])
+        entry=rows[0]['data']['connectivity']['discovery_details']
+        self.assertFalse(entry['entry_owned']);self.assertFalse(entry['active'])
+        self.assertEqual(entry['error'],'mdns_alias_failed')
+
+    def test_entry_runtime_ip_change_requires_new_election(self):
+        rows=self.commands(['@ENTRY_ENABLE','@UP','@ENTRY_RUN','AXIO 1 STATUS',
+                            '@IP','@TICK','AXIO 2 STATUS'])
+        self.assertTrue(rows[0]['data']['connectivity']['discovery_details']['entry_owned'])
+        self.assertFalse(rows[1]['data']['connectivity']['discovery_details']['entry_owned'])
+        self.assertEqual(rows[1]['data']['connectivity']['mdns_hostname'],'axio-123456789abc')
+
     def test_mdns_pending_query_ip_change_drains_without_stale_peers(self):
         rows=self.commands(['@UP','@DISC_ADVANCE','@IP','AXIO 1 STATUS','@DISC_PEER',
                             '@TICK','AXIO 2 STATUS','AXIO 3 DISCOVERY GET'])

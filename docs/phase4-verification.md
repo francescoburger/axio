@@ -2,8 +2,12 @@
 
 **Stato:** dashboard e supporto firmware integrati, installati sulle due XIAO e
 collaudati nell'ambito descritto sotto. **La Fase 4 non è dichiarata completa:**
-il nome comune `axio.local` resta disabilitato dopo la prova di conflitto; la
-fedeltà visiva richiede ancora l'accettazione dell'utente sui confronti prodotti.
+restano l'accettazione finale e i limiti di collaudo documentati.
+Il nome comune `axio.local`, inizialmente disabilitato dopo la prova di conflitto,
+è ora integrato e verificato sulle due XIAO: aggiornamento del 9 novembre in
+[phase4-entry-point-verification.md](phase4-entry-point-verification.md).
+Le sezioni tecniche seguenti descrivono la consegna iniziale; le correzioni UI,
+OSC e AP successive sono documentate nei rapporti debug richiamati dal README.
 Nessun commit, merge o push. Nessuna modifica ai riferimenti `axio_codex_ui/`,
 alla baseline o alla fixture congelata.
 
@@ -227,10 +231,16 @@ di tutte le varianti desktop/mobile. I riferimenti non sono stati modificati.
 
 ## Limiti e lavoro aperto
 
-- `axio.local`: nessuna elezione o pubblicazione comune in produzione. Prova e
-  proposta verificabile in [phase4-mdns-decision.md](phase4-mdns-decision.md).
-  Occorre valutare il meccanismo esclusivo/probing e il coordinamento prima di
-  integrarlo; non aggiungere un secondo responder o un server centrale.
+- **Aggiornamento 9 novembre 2026 — dashboard AP: PASS manuale utente.**
+  L'utente riferisce di aver provato la dashboard su AP e che sembra funzionare
+  bene. La verifica vale per l'uso della dashboard osservato dall'utente;
+  provisioning, salvataggio reti e passaggio AP→STA non sono stati specificati.
+  Le diciture AP reale NOT RUN nei rapporti precedenti descrivono le prove
+  dell'agente in quelle sessioni e restano evidenze storiche.
+- `axio.local`: elezione, probing nativo e subentro integrati il 9 novembre,
+  verificati sui due dispositivi senza un secondo responder o server centrale.
+  Restano prove con tre XIAO, partizioni e perdita pacchetti controllata; dettagli
+  in [phase4-entry-point-verification.md](phase4-entry-point-verification.md).
 - NOT RUN: endurance prolungata, potenza assorbita in sleep, accuratezza ADC con
   strumento esterno e curva SoC, stress radio/multi-client esteso, power-cut/NVS
   fisico, tara/ACK fisici, perdita di pacchetti e zero duplicazioni garantiti.

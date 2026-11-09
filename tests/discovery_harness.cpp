@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <string>
 #include "src/connectivity/DiscoveryManager.h"
+#include "src/connectivity/EntryElection.h"
 using namespace axio::connectivity;
 struct Driver {
   bool waiting=false,done=false,failStart=false,failPort=false,failQuery=false;
@@ -64,4 +65,33 @@ void failures(){
   m.tick(true,1,1,7001);assert(d.queries==1);d.failPort=true;m.tick(true,1,2,7002);assert(m.draining&&!m.active);
   m.tick(true,1,2,7003);assert(!m.running);
 }
-int main(int argc,char **argv){assert(argc==2);std::string name=argv[1];if(name=="names")names();else if(name=="cache")cache();else if(name=="capacity")capacity();else if(name=="lifecycle")lifecycle();else if(name=="pacing")pacing();else if(name=="failures")failures();else return 2;puts("PASS");}
+void election(){
+  using A=EntryElection::Action;EntryElection e;uint32_t t=0xfffff000;
+  assert(e.tick(false,false,"",t)==A::None);
+  assert(e.tick(true,false,"individual",t)==A::None);
+  assert(e.tick(true,false,"individual",t+2999)==A::None);
+  assert(e.tick(true,false,"individual",t+3000)==A::Lookup);
+  e.lookup(true,t+3500); // A healthy owner is retained, irrespective of MAC.
+  assert(e.tick(true,false,"individual",t+6499)==A::None);
+  assert(e.tick(true,false,"individual",t+6500)==A::Lookup);
+  e.lookup(false,t+7000);
+  assert(e.tick(true,false,"individual",t+7500)==A::Lookup);
+  e.lookup(false,t+8000);assert(e.tick(true,false,"individual",t+8001)==A::Census);
+  e.census(true,t+9000); // A smaller live candidate goes first.
+  assert(e.tick(true,false,"individual",t+10500)==A::Lookup);e.lookup(false,t+11000);
+  assert(e.tick(true,false,"individual",t+11500)==A::Lookup);e.lookup(false,t+12000);
+  assert(e.tick(true,false,"individual",t+12001)==A::Census);e.census(false,t+13000);
+  assert(e.tick(true,false,"individual",t+13001)==A::Lookup);
+  e.lookup(false,t+13500);assert(e.tick(true,false,"individual",t+13501)==A::Promote);
+  e.promoted(t+14000);assert(!e.leader());
+  assert(e.tick(true,true,"axio",t+16999)==A::None&&!e.leader());
+  assert(e.tick(true,true,"axio",t+17000)==A::None&&e.leader());
+  assert(e.tick(true,true,"axio-2",t+18000)==A::Demote&&e.conflicts==1&&!e.leader());
+  e.demoted(t+18000);assert(e.tick(true,false,"individual",t+22999)==A::None);
+  assert(e.tick(true,false,"individual",t+23000)==A::Lookup);
+  e.failed(t+23001);assert(e.failures==1);
+  assert(e.tick(false,true,"axio",t+23002)==A::Demote);
+  // A result arriving after radio loss cannot promote.
+  e.lookup(false,t+23003);assert(e.state()==EntryElection::State::Offline);
+}
+int main(int argc,char **argv){assert(argc==2);std::string name=argv[1];if(name=="names")names();else if(name=="cache")cache();else if(name=="capacity")capacity();else if(name=="lifecycle")lifecycle();else if(name=="pacing")pacing();else if(name=="failures")failures();else if(name=="election")election();else return 2;puts("PASS");}

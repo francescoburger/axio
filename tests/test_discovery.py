@@ -22,6 +22,7 @@ class DiscoveryTests(unittest.TestCase):
     def test_connection_loss_pending_query_change_ip_and_port(self):self.case('lifecycle')
     def test_async_query_pacing_no_busy_wait_no_catchup(self):self.case('pacing')
     def test_start_query_and_service_failures(self):self.case('failures')
+    def test_entry_election_owner_retention_census_conflict_and_rollover(self):self.case('election')
     def test_only_zero_timeout_async_queries_in_runtime(self):
         source=(ROOT/'firmware/Axio/src/connectivity/DiscoveryRuntime.cpp').read_text()
         self.assertIn('mdns_query_async_get_results(search,0,',source)
