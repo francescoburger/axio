@@ -5,8 +5,10 @@ perdita/ritorno della rete GL sono stati osservati due owner del nome comune
 e discovery finale assente sul firmware precedente. Dopo la correzione con
 annunci nativi periodici, una nuova interruzione GL e il follow-up mostrano
 un solo owner e discovery reciproca. In questa ripetizione non si sono
-formati due leader: il ricongiungimento di una coppia già in conflitto resta
-NOT RUN. [Correzione e limiti](phase4-mdns-reconciliation.md),
+formati due leader. Una successiva partizione RX mDNS su build strumentata ha
+riprodotto due leader già attivi e il ricongiungimento è PASS; produzione
+ripristinata su entrambe. [Prova mirata e limiti](phase4-mdns-partition-verification.md),
+[correzione](phase4-mdns-reconciliation.md),
 [rapporto rete precedente](phase4-network-verification.md).
 
 9 novembre 2026. Integrazione installata e verificata sulle due XIAO, con
@@ -156,7 +158,7 @@ azzerrato né presentato come zero. Ricezione/consegna OSC LAN sulla nuova
 revisione **NOT RUN**; questi contatori non dimostrano consegna o assenza di
 perdite, e il rate OSC non è usato per stimare il rate IMU.
 
-Restano NOT RUN: avvii simultanei integrati, terza XIAO, partizioni e ricongiungimento della rete, perdita
+Restano NOT RUN: accensione fisica simultanea, terza XIAO, partizioni dell'intera LAN (la prova mirata copre RX mDNS), perdita
 pacchetti controllata, comportamento di tutte le cache/browser, stabilità
 prolungata. Il meccanismo non promette unicità istantanea durante ogni conflitto,
 subentro senza interruzioni o accesso universale su reti che filtrano multicast.

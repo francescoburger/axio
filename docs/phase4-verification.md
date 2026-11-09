@@ -1,14 +1,16 @@
 # Fase 4 — consegna e verifiche
 
-**Stato:** dashboard e supporto firmware integrati, installati sulle due XIAO e
-collaudati nell'ambito descritto sotto. **La Fase 4 non è dichiarata completa:**
-restano l'accettazione finale e i limiti di collaudo documentati.
+**Stato:** Fase 4 conclusa nel perimetro funzionale concordato. Dashboard e
+supporto firmware integrati, installati sulle due XIAO e collaudati nell'ambito
+descritto sotto. L'utente ha accettato esplicitamente l'interfaccia e confermato
+la propria verifica della ricezione OSC su GL. Le verifiche estese ancora
+NOT RUN restano limiti documentati, senza essere trasformate in PASS.
 Il nome comune `axio.local`, inizialmente disabilitato dopo la prova di conflitto,
 è ora integrato e verificato sulle due XIAO: aggiornamento del 9 novembre in
 [phase4-entry-point-verification.md](phase4-entry-point-verification.md).
 Le sezioni tecniche seguenti descrivono la consegna iniziale; le correzioni UI,
 OSC e AP successive sono documentate nei rapporti debug richiamati dal README.
-Nessun commit, merge o push. Nessuna modifica ai riferimenti `axio_codex_ui/`,
+Nessuna modifica ai riferimenti `axio_codex_ui/`,
 alla baseline o alla fixture congelata.
 
 Aggiornamento 7 novembre: corrette la richiesta sleep da pulsante e la
@@ -225,19 +227,30 @@ fittizio di batteria o peer è codificato nel frontend operativo.
 
 Non è dichiarata una corrispondenza pixel-perfect: non esiste una tolleranza
 numerica approvata. Sono presenti differenze funzionali documentate (valori
-reali, stato vuoto peer, preview con campi, eye, ACK, canvas reale, N/D). Mancano
-l'accettazione utente, l'intera matrice di errori/import e una verifica estesa
-di tutte le varianti desktop/mobile. I riferimenti non sono stati modificati.
+reali, stato vuoto peer, preview con campi, eye, ACK, canvas reale, N/D).
+L'interfaccia è stata accettata esplicitamente dall'utente («L'interfaccia la
+accetto»). Questo chiude l'accettazione visiva; l'intera matrice di errori/import
+e la verifica esaustiva delle varianti desktop/mobile restano NOT RUN.
+I riferimenti non sono stati modificati.
 
 ## Limiti e lavoro aperto
 
+- **Interfaccia: accettata dall'utente.** Nessuna ulteriore revisione visiva
+  richiesta per chiudere questo punto.
+- **Ricezione OSC sul Mac nella rete GL: PASS manuale utente.** Alla proposta
+  di prova l'utente ha risposto «Questo l'ho già provato io». Nessuna modifica
+  della destinazione OSC o nuova prova effettuata dall'agente per questa
+  conferma. I NOT RUN dei rapporti precedenti descrivono le sessioni dell'agente;
+  non attribuiamo alla verifica manuale nuove misure di durata o perdita pacchetti.
 - **Nuovo collaudo rete:** riavvio coordinato delle due XIAO su TIM PASS.
   Dopo il FAIL GL con due owner è stata applicata la riconciliazione mediante
   annunci nativi periodici. Nuova interruzione GL: STA/AP/IMU/OSC recuperati;
   follow-up di 60 s PASS con un solo owner e discovery reciproca. Il primo
-  monitor aveva chiuso prima del browse reciproco, FAIL conservato. Resta
-  NOT RUN il ricongiungimento di due leader già attivi, non riprodotti nella
-  nuova prova. [Correzione e limiti](phase4-mdns-reconciliation.md).
+  monitor aveva chiuso prima del browse reciproco, FAIL conservato.
+  Il successivo ricongiungimento di due leader già attivi è PASS con una
+  partizione RX mDNS su build strumentata; produzione ripristinata su entrambe.
+  [Correzione](phase4-mdns-reconciliation.md),
+  [prova mirata e limiti](phase4-mdns-partition-verification.md).
 - **Calibrazione via OSC e acknowledgement: PASS manuale utente.** L'utente
   conferma di averli già provati sul dispositivo e che funzionano. Non sono
   richiesti nuovi comandi di calibrazione o ripetizioni per chiudere questo punto.

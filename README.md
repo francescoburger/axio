@@ -33,8 +33,9 @@ e collaudata sulle XIAO disponibili; risultati e limiti in
 individuali. [Implementazione e collaudo](docs/phase4-entry-point-verification.md).
 La precedente scorciatoia con nome comune delegato rimane documentata come
 prova fallita in [evidenza storica mDNS](docs/phase4-mdns-decision.md).
-Nessun commit o push di questa implementazione; accettazione visiva ancora da
-esprimere rispetto alle catture in `captures/phase4-device-ui/`.
+Interfaccia accettata esplicitamente dall'utente; ricezione OSC su GL confermata
+con prova manuale. Fase 4 conclusa nel perimetro funzionale concordato, con le
+verifiche estese ancora non eseguite riportate nel rapporto.
 
 ## Stato storico Fase 3
 

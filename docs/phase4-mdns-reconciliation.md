@@ -42,7 +42,7 @@ non il numero di dispositivi distinti.
 | Recupero GL, osservazione successiva | PASS | 60 s con un solo owner, discovery reciproca e HTTP comune 200; configurazioni preservate |
 | Annunci sospesi offline | PASS | Contatori costanti mentre entrambe le schede erano senza STA |
 | Monitor corretto | PASS software | Attende anche entrambi i peer e DNS coerente con l'owner; 3 test specifici |
-| Ricongiungimento di due leader già attivi | NOT RUN | In questa ripetizione non si sono formati due leader; nessun conflitto nativo registrato |
+| Ricongiungimento di due leader già attivi | PASS successivo, strumentato | Partizione RX mDNS e riapertura su entrambe; [rapporto dedicato](phase4-mdns-partition-verification.md) |
 
 Artefatti ignorati da Git:
 
@@ -98,6 +98,11 @@ formati due leader, non prova direttamente la guarigione di una coppia già
 in conflitto. Il contatore annunci prova l'accettazione dell'API, non la
 consegna di ogni pacchetto a ogni peer. Il precedente FAIL del firmware
 vecchio e il FAIL iniziale del nuovo monitor restano conservati.
+
+Aggiornamento successivo: il caso di due leader già attivi è stato riprodotto
+con un blocco RX mDNS temporaneo su una copia strumentata del firmware. Il
+ricongiungimento è PASS nell'ambito provato; il binario di produzione è stato
+ripristinato su entrambe. [Metodo, risultati e limiti](phase4-mdns-partition-verification.md).
 
 Stato finale: principale 192.168.8.159 leader, IMU ready; secondaria
 192.168.8.184 standby, IMU init_failed atteso. Sonde terminate.
