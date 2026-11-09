@@ -11,7 +11,7 @@ struct RuntimeStatus {
   unsigned outPort=0, listenPort=0;
   unsigned ip[4]={0,0,0,0};
 };
-// Platform seam: runtime status, monotonic time and the sole common tare entry.
+// Platform seam: runtime status, monotonic time and the sole calibration entry.
 template<class Platform> class DiagnosticService {
   TrackerState &tracker;
   Platform &platform;
@@ -52,10 +52,10 @@ template<class Platform> class DiagnosticService {
         s.wifi?"true":"false",s.engine?"configurable":"transitional",unsigned(s.heap),unsigned(s.minHeap),(unsigned long long)now);
     } else if (!strcmp(command,"METRICS")) {
       double seconds=double(now-epochUs)/1e6;
-      snprintf(data,sizeof(data),"{\"window_us\":%llu,\"acquisition_attempts\":%llu,\"acquired\":%llu,\"snapshots\":%llu,\"read_errors\":%llu,\"init_errors\":%llu,\"tare_requests\":%llu,\"tare_errors\":%llu,\"osc_attempts\":%llu,\"acquisition_hz\":%.6f,\"snapshot_hz\":%.6f,\"osc_attempt_hz\":%.6f,\"osc_requested_hz\":%s,\"udp_sent\":null,\"host_received\":null,\"max_read_us\":%llu,\"max_processing_us\":%llu,\"max_send_us\":%llu,\"last_interval_us\":%llu,\"max_interval_us\":%llu,\"interval_mean_us\":%.3f,\"interval_stddev_us\":%.3f}",
+      snprintf(data,sizeof(data),"{\"window_us\":%llu,\"acquisition_attempts\":%llu,\"acquired\":%llu,\"snapshots\":%llu,\"read_errors\":%llu,\"init_errors\":%llu,\"calibration_requests\":%llu,\"calibration_errors\":%llu,\"osc_attempts\":%llu,\"acquisition_hz\":%.6f,\"snapshot_hz\":%.6f,\"osc_attempt_hz\":%.6f,\"osc_requested_hz\":%s,\"udp_sent\":null,\"host_received\":null,\"max_read_us\":%llu,\"max_processing_us\":%llu,\"max_send_us\":%llu,\"last_interval_us\":%llu,\"max_interval_us\":%llu,\"interval_mean_us\":%.3f,\"interval_stddev_us\":%.3f}",
         (unsigned long long)(now-epochUs),(unsigned long long)d.attempts,(unsigned long long)d.acquired,
         (unsigned long long)d.acquired,(unsigned long long)d.readErrors,(unsigned long long)d.initErrors,
-        (unsigned long long)d.tareRequests,(unsigned long long)d.tareErrors,(unsigned long long)d.sendAttempts,
+        (unsigned long long)d.calibrationRequests,(unsigned long long)d.calibrationErrors,(unsigned long long)d.sendAttempts,
         seconds>0?d.acquired/seconds:0,seconds>0?d.acquired/seconds:0,seconds>0?d.sendAttempts/seconds:0,
         platform.status().engine?"null":"100",(unsigned long long)d.maxReadUs,(unsigned long long)d.maxProcessUs,(unsigned long long)d.maxSendUs,
         (unsigned long long)d.lastIntervalUs,(unsigned long long)d.maxIntervalUs,d.intervalMeanUs,d.attempts>1?sqrt(d.intervalM2Us/double(d.attempts-1)):0);
@@ -66,15 +66,15 @@ template<class Platform> class DiagnosticService {
         metrics(platform,data+offset,sizeof(data)-offset-1,0);
         strcat(data,"}");
       }
-    } else if (!strcmp(command,"TARE")) {
-      if (!platform.tare()) error="imu_unavailable";
-      else strcpy(data,"{\"tared\":true,\"persistent\":false}");
+    } else if (!strcmp(command,"CALIBRATION")||!strcmp(command,"TARE")) {
+      if (!platform.calibrate()) error="imu_unavailable";
+      else strcpy(data,!strcmp(command,"TARE")?"{\"tared\":true,\"persistent\":false}":"{\"calibrated\":true,\"persistent\":false}");
     } else if (!strcmp(command,"DIAG RESET")) {
       resetMetricsNow();
       strcpy(data,"{\"reset\":true,\"preserved\":[\"init_errors\",\"sequence\",\"heap_min\"]}");
     } else if (!strcmp(command,"CONFIG GET")) {
       RuntimeStatus s=platform.status();
-      snprintf(data,sizeof(data),"{\"schema\":0,\"engine\":\"transitional\",\"editable\":false,\"id\":%d,\"destination\":{\"ip\":\"%u.%u.%u.%u\",\"port\":%u},\"listen_port\":%u,\"tare_address\":\"/tare\"}",s.deviceId,s.ip[0],s.ip[1],s.ip[2],s.ip[3],s.outPort,s.listenPort);
+      snprintf(data,sizeof(data),"{\"schema\":0,\"engine\":\"transitional\",\"editable\":false,\"id\":%d,\"destination\":{\"ip\":\"%u.%u.%u.%u\",\"port\":%u},\"listen_port\":%u,\"calibration_address\":\"/calibration\"}",s.deviceId,s.ip[0],s.ip[1],s.ip[2],s.ip[3],s.outPort,s.listenPort);
     } else if ((!strncmp(command,"CONFIG VALIDATE",15) && (command[15]==' ' || !command[15])) ||
                (!strncmp(command,"CONFIG APPLY",12) && (command[12]==' ' || !command[12]))) {
       size_t n=!strncmp(command,"CONFIG VALIDATE",15)?15:12;

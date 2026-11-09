@@ -13,7 +13,7 @@ struct FakeWiFi {FakeAP AP;int mode=WIFI_STA;bool failApStart=false,failApStop=f
   bool enableSTA(bool on){mode=on?WIFI_STA:0;return true;}
   IPAddress gatewayIP(){return IPAddress(127,0,0,1);}IPAddress subnetMask(){return IPAddress(255,0,0,0);}int RSSI(){return -58;}
   int getMode(){return mode;}bool enableAP(bool enabled){if(enabled&&failApStart)return false;if(!enabled&&failApStop)return false;if(enabled){mode|=WIFI_AP;AP.up=true;++apStarts;}else {mode&=~WIFI_AP;AP.up=false;++apStops;}return true;}
-  IPAddress softAPIP(){return AP.up?IPAddress(192,168,4,1):IPAddress(0,0,0,0);}
+  IPAddress apIp{192,168,4,1};IPAddress softAPIP(){return AP.up?apIp:IPAddress(0,0,0,0);}
   std::string hostname;bool setHostname(const char *name){hostname=name;return true;}
   FakeSTA STA;bool setAutoReconnect(bool){return true;}std::string SSID(){return "test-ssid";}int link=WL_CONNECTED;IPAddress ip{192,168,1,15};int status(){return link;}IPAddress localIP(){return ip;}};
 extern FakeWiFi WiFi;

@@ -34,13 +34,13 @@ template<class Device, class Clock> class ImuManager {
     state.publish(sample, end);
     return true;
   }
-  // Single entry point for all future command sources. No automatic tare.
+  // Single entry point for all command sources. No automatic calibration.
   bool calibrateReference() {
-    ++state.diagnostics.tareRequests;
+    ++state.diagnostics.calibrationRequests;
     imu::Quaternion quat;
     imu::Vector<3> euler;
     if (!initialized || !device.readQuaternion(quat) || !device.readEuler(euler)) {
-      ++state.diagnostics.tareErrors;
+      ++state.diagnostics.calibrationErrors;
       if (initialized) state.readFailed();
       return false;
     }

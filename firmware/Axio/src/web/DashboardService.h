@@ -60,7 +60,7 @@ template<class Platform> class DashboardService {
       char cmd[24]={};
       if(!reader.object([&](const char *key)->unsigned {return !strcmp(key,"command")&&reader.text(cmd,sizeof(cmd))?1:0;})||!reader.end())return fail("invalid_command");
       // Do not expose raw USB configuration, AP secrets or arbitrary commands.
-      if(strcmp(cmd,"TARE")&&strcmp(cmd,"DIAG RESET"))return fail("command_not_allowed",403);
+      if(strcmp(cmd,"CALIBRATION")&&strcmp(cmd,"TARE")&&strcmp(cmd,"DIAG RESET"))return fail("command_not_allowed",403);
       const char *error=platform.command(cmd);return error?fail(error):json(200,"{\"ok\":true}");
     }
     if(!strcmp(path,"/api/control")){

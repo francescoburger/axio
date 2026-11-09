@@ -42,7 +42,7 @@ struct Network {
     if(udp.write(data,size)!=size) {udp.endPacket();return false;}
     return udp.endPacket()==1;
   }
-  bool tare() {return callback&&callback();}
+  bool calibrate() {return callback&&callback();}
   bool prepare(uint16_t oldPort,uint16_t newPort) {
     if(!allowed())return true;
     if(oldPort==newPort&&bound)return true;
@@ -59,8 +59,8 @@ const char *source="default";
 bool listening=false;
 uint64_t metricEpoch=0,suspendedNoSta=0,suspendedListener=0,suspendedAp=0;
 }
-void setupOscRuntime(bool (*tare)()) {
-  network.callback=tare;storage.begin();
+void setupOscRuntime(bool (*calibrate)()) {
+  network.callback=calibrate;storage.begin();
   axio::osc::setPreset("Orientation",candidate);
   auto old=legacyRuntimeStatus();
   snprintf(candidate.id,sizeof(candidate.id),"%d",old.deviceId);
@@ -93,7 +93,7 @@ void pollOscRuntime() {
   uint64_t elapsed=esp_timer_get_time()-start;
   if(elapsed>engine.metrics.maxReceiveUs)engine.metrics.maxReceiveUs=elapsed;
 }
-bool tareOscRuntime(){return engine.tare();}
+bool calibrateOscRuntime(){return engine.calibrate();}
 uint16_t oscListenPort(){return engine.get().listenPort;}
 void resetOscMetrics(){suspendedNoSta=0;suspendedListener=0;suspendedAp=0;network.bindFailures=0;engine.resetMetrics();metricEpoch=esp_timer_get_time();}
 axio::RuntimeStatus oscRuntimeStatus() {

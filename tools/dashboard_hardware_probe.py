@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only USB/HTTP Phase 4 check. No TARE, Apply, Restart, Sleep or metric reset."""
+"""Read-only USB/HTTP Phase 4 check. No CALIBRATION, Apply, Restart, Sleep or metric reset."""
 import argparse
 import gzip
 import http.client
@@ -8,6 +8,7 @@ from pathlib import Path
 import time
 from urllib.parse import urlsplit
 from hardware_test import Client,rates
+from osc_config import normalize_calibration
 
 def main():
  import serial
@@ -33,10 +34,11 @@ def main():
    time.sleep(.2)
   report['info']=info;report['initial_status']=status
   check('firmware_4',info['version'].startswith('4.'))
-  networks=client.request('WIFI GET');config=client.request('CONFIG GET')
+  networks=client.request('WIFI GET');config=normalize_calibration(client.request('CONFIG GET'))
+  before['osc']=normalize_calibration(before['osc'])
   check('saved_networks_preserved',networks==before['networks'])
   check('individual_hostname_preserved',status['connectivity']['mdns_hostname']==before['status']['connectivity']['mdns_hostname'])
-  for key in ('id','listen_port','destinations','tare_address','ack'):
+  for key in ('id','listen_port','destinations','calibration_address','ack'):
    check('osc_'+key+'_preserved',config[key]==before['osc'][key])
   check('single_editor_schema',config['schema']==2 and 'editor' in config)
   host=status['connectivity']['sta_ip']

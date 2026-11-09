@@ -33,7 +33,7 @@ class SerialTests(unittest.TestCase):
         return [json.loads(line) for line in p.stdout.splitlines()]
 
     def test_commands_jsonl_and_reset(self):
-        commands = ['PING', 'INFO', 'STATUS', 'METRICS', 'CONFIG GET', 'TARE', 'DIAG RESET', 'METRICS']
+        commands = ['PING', 'INFO', 'STATUS', 'METRICS', 'CONFIG GET', 'CALIBRATION', 'DIAG RESET', 'METRICS']
         rows = self.exchange(''.join('AXIO {} {}\r\n'.format(i,c) for i,c in enumerate(commands)).encode())
         self.assertEqual(len(rows),len(commands))
         self.assertTrue(all(r['ok'] and r['id'] == str(i) and r['axio'] == 1 for i,r in enumerate(rows)))
@@ -43,9 +43,16 @@ class SerialTests(unittest.TestCase):
         self.assertIsNone(rows[3]['data']['udp_sent'])
         self.assertFalse(rows[4]['data']['editable'])
         self.assertNotIn('password', json.dumps(rows).lower())
-        self.assertTrue(rows[5]['data']['tared'])
+        self.assertTrue(rows[5]['data']['calibrated'])
         self.assertEqual(rows[7]['data']['acquired'], 0)
-        self.assertEqual(rows[7]['data']['tare_requests'], 0)
+        self.assertEqual(rows[7]['data']['calibration_requests'], 0)
+
+    def test_legacy_command_alias_uses_same_calibration_entry(self):
+        rows=self.exchange(b'AXIO 1 CALIBRATION\nAXIO 2 TARE\nAXIO 3 METRICS\n')
+        self.assertTrue(rows[0]['data']['calibrated'])
+        self.assertTrue(rows[1]['data']['tared'])
+        self.assertEqual(rows[2]['data']['calibration_requests'],2)
+        self.assertEqual(rows[2]['data']['calibration_errors'],0)
 
     def test_malformed_and_bounded_input(self):
         wire = (b'AXIO 1 UNKNOWN\nAXIO 2 CONFIG VALIDATE {bad}\n'
@@ -68,7 +75,7 @@ class SerialTests(unittest.TestCase):
         self.assertEqual(len(rows), len(invalid))
         self.assertTrue(all(r['error']=='invalid_json' for r in rows))
 
-    def test_timeout_rollover_backpressure_and_real_tare(self):
+    def test_timeout_rollover_backpressure_and_real_calibration(self):
         subprocess.run([str(self.binary), '--self-test'], check=True, capture_output=True)
 
     def test_python_client_correlation_and_errors(self):
@@ -158,7 +165,7 @@ class SerialTests(unittest.TestCase):
         serial_module.SerialException = OSError
         tools_module = types.ModuleType('serial.tools')
         tools_module.list_ports = types.SimpleNamespace(comports=lambda: [])
-        for options in ([], ['--tare', '--reset-metrics'], ['--require-wifi']):
+        for options in ([], ['--calibrate', '--reset-metrics'], ['--tare'], ['--require-wifi']):
             port = Port()
             serial_module.Serial = lambda *a, **kw: port
             with mock.patch.dict(sys.modules, {'serial':serial_module, 'serial.tools':tools_module}), \
@@ -166,9 +173,10 @@ class SerialTests(unittest.TestCase):
                 code = hardware_test.main(['--port','FAKE',*options])
             report = json.loads(output.getvalue())
             self.assertEqual(code, 1 if '--require-wifi' in options else 0)
-            self.assertEqual('TARE' in port.commands, '--tare' in options)
+            self.assertEqual('CALIBRATION' in port.commands, '--calibrate' in options or '--tare' in options)
             self.assertEqual('DIAG RESET' in port.commands, '--reset-metrics' in options)
             self.assertFalse(report['persistent_changes'])
+            self.assertEqual([t['name'] for t in report['tests'] if t['category']=='state_change'],['calibration','diag reset'])
             self.assertEqual(next(t for t in report['tests'] if t['name']=='counters')['result'], 'PASS')
 
 

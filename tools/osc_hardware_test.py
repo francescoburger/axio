@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verifica OSC reale dalla XIAO; non applica configurazioni. Tara solo con --tare."""
+"""Verifica OSC reale dalla XIAO; non applica configurazioni. Calibra solo con --calibrate."""
 import argparse
 import json
 import math
@@ -11,6 +11,7 @@ import time
 from osc_receiver import decode_packet, OSCError
 from analyze_capture import summarize
 from hardware_test import Client
+from osc_config import normalize_calibration
 
 
 def osc_string(value):
@@ -38,17 +39,18 @@ def main():
     p.add_argument('--bind',default='0.0.0.0')
     p.add_argument('--duration',type=float,default=10)
     p.add_argument('--serial-port',help='opzionale: legge CONFIG GET e METRICS prima/dopo')
-    p.add_argument('--tare',action='store_true',help='MODIFICA riferimenti RAM; richiede ACK abilitato')
+    p.add_argument('--calibrate','--tare',dest='calibrate',action='store_true',help='MODIFICA riferimenti RAM; richiede ACK abilitato (--tare: alias precedente)')
     p.add_argument('--report',type=Path,required=True)
     a=p.parse_args()
     if not math.isfinite(a.duration) or a.duration<=0:
         p.error('durata deve essere positiva e finita')
     if a.report.exists():
         p.error('report già esistente: scegliere un nome nuovo')
-    config=json.loads(a.config.read_text())
-    if a.tare and not config['ack']['enabled']:
-        p.error('--tare richiede ACK abilitato nella configurazione già applicata')
-    report=dict(schema=1,tests=[],hardware_executed=False,tare_requested=a.tare,configuration_changed=False)
+    try:config=normalize_calibration(json.loads(a.config.read_text()))
+    except ValueError as exc:p.error(str(exc))
+    if a.calibrate and not config['ack']['enabled']:
+        p.error('--calibrate richiede ACK abilitato nella configurazione già applicata')
+    report=dict(schema=1,tests=[],hardware_executed=False,calibration_requested=a.calibrate,configuration_changed=False)
     def record(name,result,detail):
         report['tests'].append(dict(name=name,result=result,detail=detail))
     sockets=[];serial_port=None;rows=[];counts={};ack_count=0
@@ -67,15 +69,15 @@ def main():
             import serial
             serial_port=serial.Serial(a.serial_port,115200,timeout=.05,write_timeout=2,exclusive=True)
             client=Client(serial_port,2)
-            active=client.request('CONFIG GET')
+            active=normalize_calibration(client.request('CONFIG GET'))
             record('configuration', 'PASS' if active==config else 'FAIL',active)
             before=client.request('METRICS')
             report['metrics_before']=before
-        start=time.monotonic();sent_tare=False
+        start=time.monotonic();sent_calibration=False
         while time.monotonic()-start<a.duration:
-            if a.tare and not sent_tare:
-                payload=osc_string(config['tare_address'].replace('{id}',config['id']))+osc_string(',')
-                sockets[0].sendto(payload,(a.tracker_ip,config['listen_port']));sent_tare=True
+            if a.calibrate and not sent_calibration:
+                payload=osc_string(config['calibration_address'].replace('{id}',config['id']))+osc_string(',')
+                sockets[0].sendto(payload,(a.tracker_ip,config['listen_port']));sent_calibration=True
             ready,_,_=select.select(sockets,[],[],min(.1,a.duration))
             for sock in ready:
                 data,peer=sock.recvfrom(65535)
@@ -90,7 +92,7 @@ def main():
                         key=(port,m['address'])
                         ack=config['ack']
                         ack_port=config['destinations'][ack['destination']]['port']
-                        if a.tare and port==ack_port and m['address']==ack['address'].replace('{id}',config['id']):
+                        if a.calibrate and port==ack_port and m['address']==ack['address'].replace('{id}',config['id']):
                             if m['types']!=',i' or m['values']!=[1]:
                                 raise ValueError('ACK non valido')
                             ack_count+=1
@@ -105,7 +107,7 @@ def main():
                [r['error'] for r in rows if 'error' in r])
         record('messages_received','PASS' if counts and all(counts.values()) else 'FAIL',
                [dict(port=k[0],address=k[1],received=v) for k,v in counts.items()])
-        record('tare_ack',('PASS' if ack_count==1 else 'FAIL') if a.tare else 'NOT RUN',dict(acknowledgements=ack_count))
+        record('calibration_ack',('PASS' if ack_count==1 else 'FAIL') if a.calibrate else 'NOT RUN',dict(acknowledgements=ack_count))
         report['receive_statistics']=[dict(listen_port=port,streams=summarize([r for r in rows if r['listen_port']==port]))
                                       for port in sorted(ports)]
         if serial_port:

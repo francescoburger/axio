@@ -2,11 +2,8 @@
 #include <WiFi.h>
 #include <Preferences.h>
 #include <esp_wifi.h>
-#include <esp_random.h>
 #include "ApRuntime.h"
 #include "FallbackAp.h"
-#include "ProvisioningHttp.h"
-#include "ProvisioningSocket.h"
 #include "ConnectivityRuntime.h"
 #include "../diagnostics/SerialProtocol.h"
 namespace {
@@ -19,18 +16,11 @@ struct SecretStore {
   size_t read(uint8_t *p,size_t n){return ready&&prefs.getBytesLength("secret")<=n?prefs.getBytes("secret",p,n):0;}
   bool write(const uint8_t *p,size_t n){return ready&&prefs.putBytes("secret",p,n)==n;}
 } secretStore;
-struct Random {void fill(uint8_t *p,size_t n){esp_fill_random(p,n);}} randomSource;
 ApCredentials<SecretStore> credentials(secretStore);
-struct Service {
-  const char *update(const char *s,const char *p,unsigned priority,bool remove){return updateConnectivityNetwork(s,p,priority,remove);}
-  bool status(char *out,size_t cap){connectivityJson(out,cap);return strlen(out)<cap-1;}
-  bool networks(char *out,size_t cap){return connectivityNetworksJson(out,cap);}
-} service;
-ProvisioningSocket socket;
-ProvisioningHttp<ProvisioningSocket,Service> portal(socket,service);
+void (*closeHttp)()=nullptr;
 char ssid[38]={}; // Axio- plus all six MAC bytes.
 struct Driver {
-  bool armed=false,serving=false;uint32_t lastBind=0;bool triedBind=false;
+  bool armed=false,serving=false;
   uint64_t portalFailures=0;const char *error=nullptr;
   bool enabled(){return (WiFi.getMode()&WIFI_AP)!=0;}
   bool started(){return enabled()&&WiFi.AP.started()&&uint32_t(WiFi.softAPIP())!=0;}
@@ -50,24 +40,12 @@ struct Driver {
     armed=configured&&restarted;error=armed?nullptr:"ap_profile_failed";return armed;
   }
   bool start(){if(!armed||!credentials.ready)return false;return WiFi.enableAP(true);}
-  bool stop(){closePortal();return WiFi.enableAP(false);}
-  void closePortal(){portal.close();serving=false;triedBind=false;}
-  void pollPortal(uint32_t now){
-    if(!serving&&(!triedBind||uint32_t(now-lastBind)>=1000)){
-      triedBind=true;lastBind=now;
-      // AP uses the core's default 192.168.4.1/24 and DHCP server; never bind ANY.
-      auto ip=WiFi.softAPIP();uint8_t address[4]={ip[0],ip[1],ip[2],ip[3]};
-      char text[16];snprintf(text,sizeof(text),"%u.%u.%u.%u",address[0],address[1],address[2],address[3]);
-      uint8_t entropy[16];char token[33];randomSource.fill(entropy,sizeof(entropy));
-      const char *digits="0123456789abcdef";
-      for(unsigned i=0;i<16;++i){token[2*i]=digits[entropy[i]>>4];token[2*i+1]=digits[entropy[i]&15];}token[32]=0;
-      portal.begin(text,token);serving=socket.open(address);
-      memset(entropy,0,sizeof(entropy));memset(token,0,sizeof(token));
-      if(!serving){++portalFailures;error="ap_http_bind_failed";}
-      else error=nullptr;
-    }
-    if(serving)portal.tick(now);
-  }
+  bool stop(){bool stopped=WiFi.enableAP(false);if(stopped)closeHttpNow();return stopped;}
+  void closeHttpNow(){if(serving&&closeHttp)closeHttp();serving=false;}
+  // A failed radio stop leaves AP reachable. Keep HTTP alive between retries,
+  // instead of dropping every in-flight dashboard request on each STA tick.
+  void closePortal(){if(!started())closeHttpNow();}
+  void pollPortal(uint32_t){/* HTTP is serviced by tickDashboard after IMU work. */}
 } driver;
 FallbackAp<Driver> fallback(driver);
 }
@@ -89,7 +67,7 @@ bool apRuntimeCommand(const char *id,char *command,char *out){
   if(strcmp(command,"AP REKEY"))return false;
   if(*connectivityApPassword()){axio::SerialProtocol::reply(out,id,"ap_password_managed_by_network");return true;}
   // Explicit physical-USB recovery only; never invoked by web or normal transitions.
-  driver.closePortal();fallback.provisioned=false;
+  driver.closeHttpNow();fallback.provisioned=false;
   if(driver.enabled()&&!driver.stop()){axio::SerialProtocol::reply(out,id,"ap_stop_failed");return true;}
   bool saved=credentials.replace();fallback.provisioned=saved&&ssid[0]&&driver.arm();
   axio::SerialProtocol::reply(out,id,fallback.provisioned?nullptr:(credentials.error?credentials.error:"ap_profile_failed"),"{\"restored\":true,\"persistent\":true}");return true;
@@ -104,7 +82,7 @@ void apRuntimeJson(char *out,size_t cap){
 
 const char *apSsid(){return ssid;}
 void refreshApConfiguration(){
-  driver.closePortal();fallback.provisioned=false;
+  driver.closeHttpNow();fallback.provisioned=false;
   if(driver.enabled()&&!driver.stop()){driver.error="ap_stop_failed";return;}
   fallback.provisioned=credentials.ready&&ssid[0]&&driver.arm();
 }
@@ -113,4 +91,10 @@ void setApTrackerId(const char *id){
   if(!strcmp(next,ssid))return;
   snprintf(ssid,sizeof(ssid),"%s",next);refreshApConfiguration();
 }
-void stopApRuntime(){fallback.provisioned=false;driver.closePortal();driver.stop();}
+void stopApRuntime(){fallback.provisioned=false;driver.closeHttpNow();driver.stop();}
+void setApHttpClose(void (*close)()){closeHttp=close;}
+void setApHttpStatus(bool active,bool failed){
+  driver.serving=active;
+  if(failed){++driver.portalFailures;driver.error="ap_http_bind_failed";}
+  else if(active&&driver.error&&!strcmp(driver.error,"ap_http_bind_failed"))driver.error=nullptr;
+}

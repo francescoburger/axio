@@ -11,7 +11,7 @@ import unittest
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
 from osc_receiver import decode_packet
-from osc_config import preset
+from osc_config import preset, normalize_calibration
 from osc_benchmark import scenarios
 from osc_hardware_test import check_message, osc_string
 
@@ -46,6 +46,26 @@ class EngineTests(unittest.TestCase):
                 p=self.validate(preset(name))
                 self.assertEqual(p.returncode,0,p.stdout)
 
+    def test_old_calibration_key_endpoints_and_ambiguous_keys(self):
+        for current in (preset(),self.modern()):
+            old=copy.deepcopy(current)
+            del old['calibration_address'];old['tare_address']='/custom-zero/{id}'
+            old['ack']['address']='/custom-ack/{id}'
+            result=self.validate(old)
+            self.assertEqual(result.returncode,0,result.stdout)
+            expected=normalize_calibration(old)
+            self.assertEqual(json.loads(result.stdout),expected)
+            self.assertEqual(old['tare_address'],'/custom-zero/{id}')
+            for value in ('/custom-zero/{id}','/other'):
+                ambiguous=dict(old,calibration_address=value)
+                self.assertNotEqual(self.validate(ambiguous).returncode,0)
+                with self.assertRaises(ValueError):normalize_calibration(ambiguous)
+            wire=json.dumps(old,separators=(',',':'))
+            commands=['AXIO 1 CONFIG APPLY '+wire,'@REBOOT','AXIO 2 CONFIG GET']
+            rows=[json.loads(line) for line in subprocess.check_output(
+                [str(self.runtime)],input='\n'.join(commands)+'\n',text=True).splitlines()]
+            self.assertTrue(all(r['ok'] for r in rows),rows)
+            self.assertEqual(rows[-1]['data'],expected)
     def modern(self):
         row=preset('Motion')
         row['schema']=2
@@ -58,6 +78,14 @@ class EngineTests(unittest.TestCase):
     def test_interval_ms_auto_bundle_migration_and_atomic_upgrade(self):
         output=subprocess.check_output([str(self.binary),'--phase4'],text=True)
         self.assertEqual(output.strip(),'PASS phase4')
+
+    def test_calibration_alias_ack_conflicts_and_old_journal_bytes(self):
+        output=subprocess.check_output([str(self.binary),'--calibration'],text=True)
+        self.assertEqual(output.strip(),'PASS calibration compatibility')
+
+    def test_pure_data_numeric_command_through_runtime_udp_and_acknowledgement(self):
+        output=subprocess.check_output([str(self.runtime),'--pd-calibration'],text=True)
+        self.assertIn('PASS: Pure Data numeric calibration',output)
 
     def test_schema2_roundtrip_strict_validation(self):
         row=self.modern()
@@ -114,7 +142,7 @@ class EngineTests(unittest.TestCase):
         for schema in (0,2,'1',None):changed('schema',schema)
         for ident in ('','a'*17,'bad/id','bad"id'):changed('id',ident)
         for port in (0,-1,65536,1.5):changed('listen_port',port)
-        for address in ('invalid','/bad/{other}','/bad/*','/bad//x','/','/bad/'):changed('tare_address',address)
+        for address in ('invalid','/bad/{other}','/bad/*','/bad//x','/','/bad/'):changed('calibration_address',address)
         changed('unknown',True)
         changed('destinations',[])
         changed('destinations',[original['destinations'][0]]*2)
@@ -143,7 +171,7 @@ class EngineTests(unittest.TestCase):
         self.assertNotEqual(self.validate(row).returncode,0)
         self.assertEqual(self.validate(' '*7169+'{}').stdout.strip(),'config_too_large')
 
-    def test_engine_scheduling_routing_tare_and_persistence(self):
+    def test_engine_scheduling_routing_calibration_and_persistence(self):
         p=subprocess.run([str(self.binary)],check=True,capture_output=True,text=True)
         self.assertEqual(p.stdout.strip(),'PASS')
 
@@ -217,7 +245,7 @@ class EngineTests(unittest.TestCase):
         for key,value in [('address','/other'),('types',',ii'),('bundle_timetags',[]),('values',[float('nan')])]:
             invalid=dict(row);invalid[key]=value
             with self.subTest(key=key),self.assertRaises(ValueError):check_message(invalid,definition,'3')
-        self.assertEqual(osc_string('/tare'),b'/tare\0\0\0')
+        self.assertEqual(osc_string('/calibration'),b'/calibration\0\0\0\0')
         matrix=list(scenarios('127.0.0.1'))
         self.assertEqual(len(matrix),36)
         self.assertTrue(all(s['result']=='NOT RUN' for s in matrix))

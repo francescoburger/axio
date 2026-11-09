@@ -13,11 +13,11 @@ FakeWiFi WiFi;
 std::map<std::string,std::vector<uint8_t>> fakeNvs;
 bool failNvs=false,failListener=false;
 axio::RuntimeStatus legacyRuntimeStatus(){axio::RuntimeStatus s;s.wifi=WiFi.status()==WL_CONNECTED;return s;}
-bool tare(){return true;}
+bool calibrate(){return true;}
 struct Platform {
   uint64_t nowUs(){return uint64_t(millis())*1000;}
   axio::RuntimeStatus status(){return oscRuntimeStatus();}
-  bool tare(){return tareOscRuntime();}
+  bool calibrate(){return calibrateOscRuntime();}
   bool configCommand(const char *id,char *cmd,char *out){return connectivityCommand(id,cmd,out)||oscConfigCommand(id,cmd,out);}
   void resetMetrics(){resetOscMetrics();}
   void metricsJson(char *out,size_t cap){oscMetricsJson(out,cap);}
@@ -26,7 +26,7 @@ struct Platform {
 int main(){
   strcpy(reinterpret_cast<char *>(fakeSdk().legacy.sta.ssid),"old-ssid");
   strcpy(reinterpret_cast<char *>(fakeSdk().legacy.sta.password),"secret-migration");
-  setupConnectivity();setupOscRuntime(tare);
+  setupConnectivity();setupOscRuntime(calibrate);
   Platform p;axio::TrackerState tracker;axio::DiagnosticService<Platform> service(tracker,p);
   axio::SerialProtocol protocol;char out[axio::SerialProtocol::MaxReply];std::string line;
   axio::Sample sample;sample.valid=true;
@@ -67,7 +67,7 @@ int main(){
     }
     if(line=="@REBOOT"){
       // Fresh process objects are tested in the policy harness; here reload the production adapters.
-      setupConnectivity();setupOscRuntime(tare);continue;
+      setupConnectivity();setupOscRuntime(calibrate);continue;
     }
     for(char c:line)protocol.feed(c,millis(),service,out);
     if(protocol.feed('\n',millis(),service,out))std::cout<<out;

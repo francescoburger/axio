@@ -17,10 +17,19 @@ class Packet {
   }
   bool bundle() {return bytes("#bundle\0",8)&&integer(0)&&integer(1);}
 };
-inline bool tarePacket(const uint8_t *p,size_t n,const char *address) {
+inline bool calibrationPacket(const uint8_t *p,size_t n,const char *address) {
   size_t len=strlen(address)+1, offset=padded(len);
-  if(n!=offset+4 || memcmp(p,address,len))return false;
+  if(n<offset+4 || memcmp(p,address,len))return false;
   for(size_t i=len;i<offset;++i)if(p[i])return false;
-  return p[offset]==',' && !p[offset+1] && !p[offset+2] && !p[offset+3];
+  if(p[offset]!=',' || p[offset+2] || p[offset+3])return false;
+  if(!p[offset+1])return n==offset+4;
+  // Pure Data's oscformat encodes a numeric trigger as ,f by default.
+  // The argument triggers the command; it is never an orientation reference.
+  if(n!=offset+8)return false;
+  if(p[offset+1]=='i')return true;
+  if(p[offset+1]!='f')return false;
+  uint32_t bits=uint32_t(p[offset+4])<<24|uint32_t(p[offset+5])<<16|
+                uint32_t(p[offset+6])<<8|uint32_t(p[offset+7]);
+  return (bits&0x7f800000u)!=0x7f800000u; // Reject NaN/infinity.
 }
 }}

@@ -30,7 +30,7 @@ struct DiagnosticPlatform {
   void connectivityJson(char *out,size_t cap) {::connectivityJson(out,cap);}
   void resetMetrics() {resetOscMetrics();}
   void metricsJson(char *out,size_t cap) {oscMetricsJson(out,cap);}
-  bool tare() { return dashboardImuAllowed()&&tareOscRuntime(); }
+  bool calibrate() { return dashboardImuAllowed()&&calibrateOscRuntime(); }
 } diagnosticPlatform;
 axio::DiagnosticService<DiagnosticPlatform> diagnosticService(tracker, diagnosticPlatform);
 axio::UsbDiagnostics<decltype(diagnosticService)> usbDiagnostics(diagnosticService);

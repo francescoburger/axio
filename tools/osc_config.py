@@ -7,14 +7,24 @@ import sys
 from hardware_test import Client, ProtocolError
 
 
+def normalize_calibration(config):
+    """Read old saved JSON/captures without changing endpoint or ACK values."""
+    result=dict(config)
+    if 'tare_address' in result:
+        if 'calibration_address' in result:
+            raise ValueError('chiavi calibrazione duplicate')
+        result['calibration_address']=result.pop('tare_address')
+    return result
+
+
 def preset(name='Orientation', ip='127.0.0.1', port=16888, device_id='0'):
     definitions = {
         'Orientation': [('orientation', ['yaw','pitch','roll']), ('quaternion', ['q0','q1','q2','q3'])],
         'Motion': [('motion/linear', ['axReal','ayReal','azReal']),
                    ('motion/world', ['axWorld','ayWorld','azWorld']), ('motion/gyro', ['gx','gy','gz'])],
         'Custom': [('custom', ['yaw'])]}
-    return dict(schema=1, preset=name, id=device_id, listen_port=16889, tare_address='/tare',
-                ack=dict(enabled=False, address='/tared/{id}', destination=0),
+    return dict(schema=1, preset=name, id=device_id, listen_port=16889, calibration_address='/calibration',
+                ack=dict(enabled=False, address='/calibrated/{id}', destination=0),
                 destinations=[dict(ip=ip,port=port)],
                 messages=[dict(address='/'+address+'/{id}', hz=100, bundle=True, fields=fields, destinations=[0])
                           for address,fields in definitions[name]])

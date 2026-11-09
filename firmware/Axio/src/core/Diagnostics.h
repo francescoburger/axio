@@ -3,7 +3,7 @@
 namespace axio {
 struct Diagnostics {
   uint64_t attempts=0, acquired=0, readErrors=0, initErrors=0;
-  uint64_t tareRequests=0, tareErrors=0, sendAttempts=0;
+  uint64_t calibrationRequests=0, calibrationErrors=0, sendAttempts=0;
   uint64_t lastReadUs=0, maxReadUs=0, lastSendUs=0, maxSendUs=0;
   uint64_t lastStartUs=0, lastIntervalUs=0, maxIntervalUs=0;
   uint64_t lastProcessUs=0, maxProcessUs=0;

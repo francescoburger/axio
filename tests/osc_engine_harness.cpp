@@ -20,13 +20,83 @@ struct Net {
   struct Sent {Destination d;std::vector<uint8_t> packet;};
   std::vector<Sent> sent;
   bool valid=true,queue=true,prepareOk=true,staged=false;
-  unsigned tares=0;
+  unsigned calibrations=0;
   bool send(const Destination &d,const uint8_t *p,size_t n){sent.push_back({d,std::vector<uint8_t>(p,p+n)});return queue;}
-  bool tare(){++tares;return valid;}
+  bool calibrate(){++calibrations;return valid;}
   bool prepare(uint16_t,uint16_t){staged=prepareOk;return prepareOk;}
   void cancel(){staged=false;}
   void activate(){staged=false;}
 };
+void numericCalibrationPackets(){
+  Net n;Engine<Net> engine(n);Config c=preset("Custom");strcpy(c.calibrationAddress,"/cal");
+  c.ackEnabled=true;engine.activate(c);
+  for(const char *tag:{",i",",f"}){
+    for(uint32_t value:{0u,1u,0xffffffffu,0x3f800000u,0xbf800000u}){
+      if(tag[1]=='f'&&(value&0x7f800000u)==0x7f800000u)continue;
+      Packet command;command.string("/cal");command.string(tag);command.integer(value);
+      unsigned before=n.calibrations;assert(engine.receive(command.data,command.size));
+      assert(n.calibrations==before+1);
+      for(size_t length=0;length<command.size;++length)assert(!engine.receive(command.data,length));
+      command.data[5]=1;assert(!engine.receive(command.data,command.size));command.data[5]=0;
+      command.data[11]=1;assert(!engine.receive(command.data,command.size));
+      assert(n.calibrations==before+1);
+    }
+  }
+  unsigned before=n.calibrations;
+  for(uint32_t value:{0x7f800000u,0xff800000u,0x7fc00000u}){
+    Packet command;command.string("/cal");command.string(",f");command.integer(value);
+    assert(!engine.receive(command.data,command.size));
+  }
+  for(const char *tag:{",s",",ff",",d",",T"}){
+    Packet command;command.string("/cal");command.string(tag);command.integer(1);
+    assert(!engine.receive(command.data,command.size));
+  }
+  Packet bundle,inner;inner.string("/cal");inner.string(",f");inner.integer(0x3f800000u);
+  bundle.bundle();bundle.integer(inner.size);bundle.bytes(inner.data,inner.size);
+  assert(!engine.receive(bundle.data,bundle.size));assert(n.calibrations==before);
+}
+void calibrationCompatibility() {
+  Net n;Engine<Net> engine(n);Config c=preset("Custom");strcpy(c.id,"test");
+  c.ackEnabled=true;strcpy(c.ackAddress,"/saved-ack/{id}");
+  for(const char *address:{"/calibration","/calibration/{id}","/tare","/tare/{id}"}) {
+    strcpy(c.calibrationAddress,address);assert(!validate(c));engine.activate(c);n.sent.clear();
+    char canonical[AddressSize],alias[AddressSize];expand(address,c.id,canonical,sizeof(canonical));
+    assert(calibrationAlias(c,alias,sizeof(alias)));
+    unsigned before=n.calibrations;
+    for(const char *endpoint:{canonical,alias}){
+      Packet command;command.string(endpoint);command.string(",");
+      assert(engine.receive(command.data,command.size));
+      assert(!engine.receive(command.data,command.size-1));
+    }
+    assert(n.calibrations==before+2&&n.sent.size()==2);
+    Packet ack;ack.string("/saved-ack/test");ack.string(",i");ack.integer(1);
+    for(const auto &sent:n.sent)assert(sent.packet==std::vector<uint8_t>(ack.data,ack.data+ack.size));
+  }
+  strcpy(c.calibrationAddress,"/calibration");strcpy(c.messages[0].address,"/tare");
+  assert(!validate(c));engine.activate(c);
+  Packet old;old.string("/tare");old.string(",");unsigned before=n.calibrations;
+  assert(!engine.receive(old.data,old.size)&&n.calibrations==before); // Output address wins.
+  strcpy(c.messages[0].address,"/custom/{id}");strcpy(c.ackAddress,"/tare");
+  assert(!validate(c));engine.activate(c);assert(!engine.receive(old.data,old.size));
+  strcpy(c.calibrationAddress,"/custom-zero");strcpy(c.ackAddress,"/tared/{id}");
+  assert(!validate(c));engine.activate(c);assert(!engine.receive(old.data,old.size));
+  // Genuine pre-update journal bytes, including the old key and ACK value.
+  char json[MaxConfig+1];assert(serialize(c,json,sizeof(json)));std::string legacy=json;
+  legacy.replace(legacy.find("calibration_address"),strlen("calibration_address"),"tare_address");
+  Store store;auto &record=store.slots[0];record.resize(16+legacy.size());
+  auto put=[&](unsigned offset,uint32_t value){for(unsigned i=0;i<4;++i)record[offset+i]=uint8_t(value>>(8*i));};
+  memcpy(record.data()+16,legacy.data(),legacy.size());put(0,0x314f5841);put(4,1);put(8,legacy.size());
+  put(12,crc32(record.data()+16,legacy.size()));store.selected=2;
+  auto original=record;Journal<Store> journal(store);Config loaded;
+  assert(journal.load(loaded)&&!strcmp(loaded.calibrationAddress,"/custom-zero")&&!strcmp(loaded.ackAddress,"/tared/{id}"));
+  assert(store.slots[0]==original&&store.slots[1].empty()&&store.selected==2); // Read-only migration.
+  store.failCommit=true;assert(!journal.save(loaded));
+  {Journal<Store> reboot(store);assert(reboot.load(loaded)&&!strcmp(loaded.calibrationAddress,"/custom-zero"));}
+  store.failCommit=false;assert(journal.save(loaded));
+  {Journal<Store> reboot(store);assert(reboot.load(loaded)&&!strcmp(loaded.ackAddress,"/tared/{id}"));}
+  auto &saved=store.slots[store.selected&1];std::string savedJson(saved.begin()+16,saved.end());
+  assert(savedJson.find("calibration_address")!=std::string::npos&&savedJson.find("tare_address")==std::string::npos);
+}
 int main(int argc,char **argv) {
   axio::Diagnostics diagnostic;
   diagnostic.beginRead(1000);diagnostic.beginRead(11000);diagnostic.beginRead(31000);
@@ -42,6 +112,9 @@ int main(int argc,char **argv) {
     jitterEngine.tick(jitterSample,timestamp); // same sequence is still discarded
   }
   assert(jitterNet.sent.size()==101 && jitterEngine.metrics.schedules[0]==101);
+  if(argc>1 && std::string(argv[1])=="--calibration"){
+    calibrationCompatibility();numericCalibrationPackets();std::cout<<"PASS calibration compatibility\n";return 0;
+  }
   if(argc>1 && std::string(argv[1])=="--validate") {
     std::string json((std::istreambuf_iterator<char>(std::cin)),{});Config c;const char *error=parse(json.c_str(),c);
     if(error){std::cout<<error<<'\n';return 2;}
@@ -127,14 +200,14 @@ int main(int argc,char **argv) {
   assert(net.sent[0].packet==std::vector<uint8_t>(ordered.data,ordered.data+ordered.size));
   sample.sequence++;engine.tick(sample,1000000);assert(net.sent.size()==4); // no burst catch-up
   sample.sequence++;engine.tick(sample,1000000);assert(net.sent.size()==4);
-  c.ackEnabled=true;strcpy(c.tare,"/tare/{id}");strcpy(c.id,"test");engine.activate(c);net.sent.clear();net.queue=true;
-  Packet command;command.string("/tare/test");command.string(",");
-  assert(engine.receive(command.data,command.size));assert(net.sent.size()==1 && net.tares==1);
-  Packet ack;ack.string("/tared/test");ack.string(",i");ack.integer(1);
+  c.ackEnabled=true;strcpy(c.calibrationAddress,"/calibration/{id}");strcpy(c.id,"test");engine.activate(c);net.sent.clear();net.queue=true;
+  Packet command;command.string("/calibration/test");command.string(",");
+  assert(engine.receive(command.data,command.size));assert(net.sent.size()==1 && net.calibrations==1);
+  Packet ack;ack.string("/calibrated/test");ack.string(",i");ack.integer(1);
   assert(net.sent[0].packet==std::vector<uint8_t>(ack.data,ack.data+ack.size));
-  net.valid=false;assert(!engine.receive(command.data,command.size));assert(net.sent.size()==1 && net.tares==2);
-  assert(!engine.receive(command.data,command.size-1));assert(net.tares==2);
-  command.data[command.size-1]=1;assert(!engine.receive(command.data,command.size));assert(net.tares==2);
+  net.valid=false;assert(!engine.receive(command.data,command.size));assert(net.sent.size()==1 && net.calibrations==2);
+  assert(!engine.receive(command.data,command.size-1));assert(net.calibrations==2);
+  command.data[command.size-1]=1;assert(!engine.receive(command.data,command.size));assert(net.calibrations==2);
   engine.resetMetrics();assert(engine.metrics.udpAttempts==0);
   // Failure injection uses the production transaction and journal.
   Store store;Journal<Store> journal(store);Config loaded;

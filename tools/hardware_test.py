@@ -124,7 +124,7 @@ def main(argv=None):
     parser.add_argument('--timeout', type=float, default=2)
     parser.add_argument('--boot-timeout', type=float, default=20)
     parser.add_argument('--metrics-seconds', type=float, default=2)
-    parser.add_argument('--tare', action='store_true', help='MODIFICA riferimenti in RAM')
+    parser.add_argument('--calibrate', '--tare', dest='calibrate', action='store_true', help='MODIFICA riferimenti in RAM (--tare: alias precedente)')
     parser.add_argument('--reset-metrics', action='store_true', help='MODIFICA contatori diagnostici')
     parser.add_argument('--require-wifi', action='store_true')
     parser.add_argument('--wifi-wait-seconds', type=float, default=0,
@@ -187,7 +187,7 @@ def main(argv=None):
                         record('imu', 'PASS' if data.get('imu') == 'ready' and data.get('sample_valid') else 'FAIL', data)
                         record('wifi', ('PASS' if data.get('wifi_connected') else 'FAIL') if args.require_wifi else 'NOT RUN',
                                data.get('wifi_connected'), 'wifi')
-                for enabled, command in ((args.tare, 'TARE'), (args.reset_metrics, 'DIAG RESET')):
+                for enabled, command in ((args.calibrate, 'CALIBRATION'), (args.reset_metrics, 'DIAG RESET')):
                     if enabled:
                         record(command.lower(), 'PASS', client.request(command), 'state_change')
                     else:
@@ -209,7 +209,7 @@ def main(argv=None):
     for name, category in [('communication', 'usb_read_only'), ('info', 'usb_read_only'),
                            ('status', 'usb_read_only'), ('imu', 'usb_read_only'),
                            ('config get', 'usb_read_only'), ('counters', 'usb_read_only'),
-                           ('tare', 'state_change'), ('diag reset', 'state_change'),
+                           ('calibration', 'state_change'), ('diag reset', 'state_change'),
                            ('wifi', 'wifi'), ('osc_receive', 'wifi_receiver')]:
         if name not in existing:
             record(name, 'NOT RUN', 'non raggiunto; vedere prerequisiti o errore hardware', category)

@@ -27,7 +27,7 @@ class Calibration {
     float &gy = sample.gy;
     float &gz = sample.gz;
     imu::Quaternion &quatRelative = sample.quatRelative;
-    // --- Quaternion (relative to tare reference) ---
+    // --- Quaternion (relative to calibration reference) ---
 
     imu::Quaternion quat = raw.quat;
     quatRelative = quatOffset * quat;

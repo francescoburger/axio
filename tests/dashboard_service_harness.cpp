@@ -43,8 +43,8 @@ int main(){
   p.canSleepValue=false;assert(request("/api/control","{\"action\":\"sleep\",\"confirm\":true}").code==400);
   request("/api/control","{\"action\":\"restart\",\"confirm\":true}");service.finished(true);assert(p.restarts==1);
   assert(request("/api/command","{\"command\":\"AP CREDENTIALS\"}").code==403&&p.commands==0);
-  assert(request("/api/command","{\"command\":\"TARE\"}").code==200&&p.commands==1);
-  assert(request("/api/command","{\"command\":\"TARE\",\"command\":\"TARE\"}").code==400);
+  assert(request("/api/command","{\"command\":\"CALIBRATION\"}").code==200&&p.commands==1);
+  assert(request("/api/command","{\"command\":\"CALIBRATION\",\"command\":\"CALIBRATION\"}").code==400);
   p.busyValue=true;assert(request("/api/identity","{\"id\":\"x\"}").code==409);p.busyValue=false;
   assert(request("/api/identity","{\"id\":\"x\",\"unknown\":0}").code==400);
   assert(request("/api/identity","{\"id\":\"x\"}").code==200);service.finished(true);assert(p.ids==2);

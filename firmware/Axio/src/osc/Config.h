@@ -37,13 +37,13 @@ struct Editor {
 struct Config {
   Editor editor;bool hasEditor=false;
   uint8_t schema=1;
-  char id[17]="0", preset[12]="Orientation", tare[AddressSize]="/tare";
+  char id[17]="0", preset[12]="Orientation", calibrationAddress[AddressSize]="/calibration";
   uint16_t listenPort=16889;
   Destination destinations[MaxDest];
   Message messages[MaxMessages];
   uint8_t destCount=1, messageCount=1, ackDestination=0;
   bool ackEnabled=false;
-  char ackAddress[AddressSize]="/tared/{id}";
+  char ackAddress[AddressSize]="/calibrated/{id}";
 };
 inline const char *compileEditor(const Editor &,const Config &,Config &);
 inline bool expand(const char *source,const char *id,char *out,size_t cap) {
@@ -73,9 +73,9 @@ inline const char *validateParts(const Config &c,const Message *messages,unsigne
   if(!c.listenPort || !*c.id || strlen(c.id)>16) return "invalid_config";
   for(const char *p=c.id;*p;++p) if(!((*p>='0'&&*p<='9')||(*p>='a'&&*p<='z')||(*p>='A'&&*p<='Z')||*p=='_'||*p=='-')) return "invalid_id";
   if(schema==1 && strcmp(c.preset,"Orientation") && strcmp(c.preset,"Motion") && strcmp(c.preset,"Custom")) return "invalid_preset";
-  char address[AddressSize],other[AddressSize],tare[AddressSize],ack[AddressSize];
-  if(!expand(c.tare,c.id,tare,sizeof(tare)) || !expand(c.ackAddress,c.id,ack,sizeof(ack))) return "invalid_address";
-  if(c.ackDestination>=c.destCount || !strcmp(tare,ack)) return "address_conflict";
+  char address[AddressSize],other[AddressSize],calibrationAddress[AddressSize],ack[AddressSize];
+  if(!expand(c.calibrationAddress,c.id,calibrationAddress,sizeof(calibrationAddress)) || !expand(c.ackAddress,c.id,ack,sizeof(ack))) return "invalid_address";
+  if(c.ackDestination>=c.destCount || !strcmp(calibrationAddress,ack)) return "address_conflict";
   for(unsigned i=0;i<c.destCount;++i) {
     const auto &d=c.destinations[i];
     if(!d.port || !d.ip[0] || d.ip[0]>=224 || d.ip[3]==255) return "invalid_destination";
@@ -87,7 +87,7 @@ inline const char *validateParts(const Config &c,const Message *messages,unsigne
     if(schema==2 && m.intervalMs<10) return "invalid_interval";
     if(!m.argCount || m.argCount>MaxArgs || !m.routes || (unsigned(m.routes)>>c.destCount)) return "invalid_arguments_or_routes";
     if(!expand(m.address,c.id,address,sizeof(address))) return "invalid_address";
-    if(!strcmp(address,tare)||!strcmp(address,ack)) return "address_conflict";
+    if(!strcmp(address,calibrationAddress)||!strcmp(address,ack)) return "address_conflict";
     if(messageSize(m,c.id)>MaxPacket) return "packet_too_large";
     for(unsigned k=0;k<m.argCount;++k) if(m.args[k]>=16) return "unknown_field";
     for(unsigned j=0;j<i;++j) {
@@ -104,6 +104,20 @@ inline const char *validateParts(const Config &c,const Message *messages,unsigne
   return nullptr;
 }
 inline const char *validate(const Config &c){return validateParts(c,c.messages,c.messageCount,c.schema);}
+// Default endpoint aliases preserve existing clients in either direction.
+// Never steal a configured output/ACK address or alias a custom endpoint.
+inline bool calibrationAlias(const Config &c,char *out,size_t cap) {
+  const char *alias=nullptr;
+  if(!strcmp(c.calibrationAddress,"/calibration"))alias="/tare";
+  else if(!strcmp(c.calibrationAddress,"/calibration/{id}"))alias="/tare/{id}";
+  else if(!strcmp(c.calibrationAddress,"/tare"))alias="/calibration";
+  else if(!strcmp(c.calibrationAddress,"/tare/{id}"))alias="/calibration/{id}";
+  if(!alias||!expand(alias,c.id,out,cap))return false;
+  char other[AddressSize];
+  expand(c.ackAddress,c.id,other,sizeof(other));if(!strcmp(out,other))return false;
+  for(unsigned i=0;i<c.messageCount;++i){expand(c.messages[i].address,c.id,other,sizeof(other));if(!strcmp(out,other))return false;}
+  return true;
+}
 inline const char *compileEditor(const Editor &editor,const Config &base,Config &out) {
   if(editor.intervalMs<10)return "invalid_interval";
   Message messages[5];unsigned messageCount=0;
@@ -214,7 +228,8 @@ inline const char *parse(const char *json,Config &c) {
     else if(!strcmp(key,"preset")){if(!r.text(c.preset,sizeof(c.preset)))return 0;bit=2;}
     else if(!strcmp(key,"id")){if(!r.text(c.id,sizeof(c.id)))return 0;bit=4;}
     else if(!strcmp(key,"listen_port")){if(!r.number(n))return 0;c.listenPort=n;bit=8;}
-    else if(!strcmp(key,"tare_address")){if(!r.text(c.tare,sizeof(c.tare)))return 0;bit=16;}
+    // Same seen bit rejects duplicates, including both old and new spellings.
+    else if(!strcmp(key,"calibration_address")||!strcmp(key,"tare_address")){if(!r.text(c.calibrationAddress,sizeof(c.calibrationAddress)))return 0;bit=16;}
     else if(!strcmp(key,"ack")) {
       unsigned mask=0;
       if(!r.object([&](const char *k)->unsigned {
@@ -304,8 +319,8 @@ inline bool serialize(const Config &c,char *out,size_t cap) {
   size_t used=0;
   auto append=[&](const char *s)->bool {size_t n=strlen(s);if(used+n>=cap)return false;memcpy(out+used,s,n+1);used+=n;return true;};
   char b[512];
-  snprintf(b,sizeof(b),"{\"schema\":1,\"preset\":\"%s\",\"id\":\"%s\",\"listen_port\":%u,\"tare_address\":\"%s\",\"ack\":{\"enabled\":%s,\"address\":\"%s\",\"destination\":%u},\"destinations\":[",c.preset,c.id,c.listenPort,c.tare,c.ackEnabled?"true":"false",c.ackAddress,c.ackDestination);
-  if(c.schema==2) snprintf(b,sizeof(b),"{\"schema\":2,\"id\":\"%s\",\"listen_port\":%u,\"tare_address\":\"%s\",\"ack\":{\"enabled\":%s,\"address\":\"%s\",\"destination\":%u},\"destinations\":[",c.id,c.listenPort,c.tare,c.ackEnabled?"true":"false",c.ackAddress,c.ackDestination);
+  snprintf(b,sizeof(b),"{\"schema\":1,\"preset\":\"%s\",\"id\":\"%s\",\"listen_port\":%u,\"calibration_address\":\"%s\",\"ack\":{\"enabled\":%s,\"address\":\"%s\",\"destination\":%u},\"destinations\":[",c.preset,c.id,c.listenPort,c.calibrationAddress,c.ackEnabled?"true":"false",c.ackAddress,c.ackDestination);
+  if(c.schema==2) snprintf(b,sizeof(b),"{\"schema\":2,\"id\":\"%s\",\"listen_port\":%u,\"calibration_address\":\"%s\",\"ack\":{\"enabled\":%s,\"address\":\"%s\",\"destination\":%u},\"destinations\":[",c.id,c.listenPort,c.calibrationAddress,c.ackEnabled?"true":"false",c.ackAddress,c.ackDestination);
   if(!append(b))return false;
   for(unsigned i=0;i<c.destCount;++i){auto &d=c.destinations[i];snprintf(b,sizeof(b),"%s{\"ip\":\"%u.%u.%u.%u\",\"port\":%u}",i?",":"",d.ip[0],d.ip[1],d.ip[2],d.ip[3],d.port);if(!append(b))return false;}
   if(c.schema==2 && c.hasEditor) {

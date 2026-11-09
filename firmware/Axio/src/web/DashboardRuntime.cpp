@@ -36,7 +36,7 @@ axio::Battery measuredBattery;
 axio::SleepButton sleepButton;
 char sessionToken[33]={},appliedId[17]={};
 const char *configurationError=nullptr;
-bool serving=false,tried=false,communicationsOff=false;
+bool serving=false,tried=false,communicationsOff=false,boundAp=false;
 uint32_t cachedFlashSize=0,cachedFlashPartition=0;
 uint32_t lastBind=0,boundIp=0;uint64_t httpFailures=0;
 enum Deferred {Nothing,ApplyNetwork,ApplyIdentity};Deferred deferred=Nothing;uint32_t deferredAt=0;
@@ -66,10 +66,11 @@ void ip(axio::JsonWriter &w,IPAddress address){w.add("\"%u.%u.%u.%u\"",address[0
 const char *sensorStatus(){if(!powerController.imuAllowed())return powerController.status();const char *s[]={"uninitialized","ready","init_failed","read_error"};return s[unsigned(tracker->sensor)];}
 struct Platform {
   bool host(const char *name){
-    char literal[96],local[80];auto address=WiFi.localIP();
+    char literal[96],local[80];auto address=boundAp?WiFi.softAPIP():WiFi.localIP();
     snprintf(literal,sizeof(literal),"%u.%u.%u.%u",address[0],address[1],address[2],address[3]);
     snprintf(local,sizeof(local),"%s.local",discoveryHostname());
     for(const char *allowed:{literal,local}){
+      if(boundAp&&allowed==local)continue; // mDNS is a STA service only.
       size_t n=strlen(allowed);if(!strcasecmp(name,allowed))return true;
       char port[12];snprintf(port,sizeof(port),":%u",unsigned(AXIO_DASHBOARD_HTTP_PORT));
       if(!strncasecmp(name,allowed,n)&&!strcmp(name+n,port))return true;
@@ -88,7 +89,7 @@ struct Platform {
   void power(bool sleep){pinMode(BUTTON_PIN,INPUT_PULLUP);powerController.request(sleep,millis());}
   void powerStatus(char *out,size_t cap){snprintf(out,cap,"{\"state\":\"%s\",\"wake_cause\":%u,\"error\":%s%s%s}",powerController.status(),unsigned(esp_sleep_get_wakeup_cause()),powerController.error?"\"":"",powerController.error?powerController.error:"null",powerController.error?"\"":"");}
   const char *command(const char *cmd){
-    if(!strcmp(cmd,"TARE"))return powerController.imuAllowed()&&tareOscRuntime()?nullptr:"imu_unavailable";
+    if(!strcmp(cmd,"CALIBRATION")||!strcmp(cmd,"TARE"))return powerController.imuAllowed()&&calibrateOscRuntime()?nullptr:"imu_unavailable";
     resetMetricsCallback();return nullptr;
   }
   void battery(char *out,size_t cap){
@@ -105,18 +106,19 @@ struct Platform {
   bool snapshot(char *out,size_t cap){
     axio::JsonWriter w(out,cap);const auto &c=oscConfiguration();const auto &d=tracker->diagnostics;
     bool connected=WiFi.status()==WL_CONNECTED&&uint32_t(WiFi.localIP())!=0;
+    bool apActive=(WiFi.getMode()&WIFI_AP)&&WiFi.AP.started()&&uint32_t(WiFi.softAPIP())!=0;
     uint8_t mac[6]={};esp_wifi_get_mac(WIFI_IF_STA,mac);
-    w.add("{\"device\":{\"id\":\"%s\",\"mac\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"ip\":",c.id,mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);ip(w,WiFi.localIP());
+    w.add("{\"device\":{\"id\":\"%s\",\"mac\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"ip\":",c.id,mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);ip(w,boundAp?WiFi.softAPIP():WiFi.localIP());
     w.add(",\"hostname\":\"%s.local\",\"ap_ssid\":\"%s\",\"version\":\"4.0.0-dev\",\"osc_status\":\"%s\"},",discoveryHostname(),apSsid(),configurationError?"Configuration error":connected&&!(WiFi.getMode()&WIFI_AP)?"Active":"Suspended");
     w.add("\"status\":{\"wifi_connected\":%s,\"imu\":\"%s\"},\"osc\":",connected?"true":"false",sensorStatus());
     w.raw([&](char *p,size_t n){return axio::osc::serialize(c,p,n);});
     w.add(",\"peers\":");w.raw(discoveryPeersJson);
-    w.add(",\"network\":{\"connected\":%s,\"revision\":%u,\"ssid\":",connected?"true":"false",dashboardNetworkRevision());
+    w.add(",\"network\":{\"connected\":%s,\"ap_active\":%s,\"revision\":%u,\"ssid\":",connected?"true":"false",apActive?"true":"false",dashboardNetworkRevision());
     // SSID is an arbitrary byte string: use hex in the saved editor for lossless round trips.
     wifi_config_t radio={};esp_wifi_get_config(WIFI_IF_STA,&radio);char ssid[33]={};memcpy(ssid,radio.sta.ssid,32);w.quote(connected?ssid:"");
-    w.add(",\"ip\":");ip(w,WiFi.localIP());w.add(",\"gateway\":");ip(w,WiFi.gatewayIP());w.add(",\"subnet\":");ip(w,WiFi.subnetMask());
+    w.add(",\"ip\":");ip(w,boundAp?WiFi.softAPIP():WiFi.localIP());w.add(",\"gateway\":");if(connected)ip(w,WiFi.gatewayIP());else w.add("null");w.add(",\"subnet\":");if(connected)ip(w,WiFi.subnetMask());else w.add("null");
     if(connected)w.add(",\"rssi\":%d",WiFi.RSSI());else w.add(",\"rssi\":null");
-    w.add(",\"entry_point\":null,\"entry_state\":\"unverified\",\"ap_ip\":\"192.168.4.1\",\"networks\":[");
+    w.add(",\"entry_point\":null,\"entry_state\":\"unverified\",\"ap_ip\":");ip(w,apActive?WiFi.softAPIP():IPAddress(192,168,4,1));w.add(",\"networks\":[");
     const auto &networks=dashboardNetworks();unsigned order[8]={};
     for(unsigned i=0;i<networks.count;++i){order[i]=i;for(unsigned j=i;j&&networks.networks[order[j]].priority>networks.networks[order[j-1]].priority;--j){unsigned t=order[j];order[j]=order[j-1];order[j-1]=t;}}
     for(unsigned i=0;i<networks.count;++i){const auto &n=networks.networks[order[i]];w.add("%s{\"original\":%u,\"ssid_hex\":\"",i?",":"",order[i]);for(const unsigned char *p=reinterpret_cast<const unsigned char *>(n.ssid);*p;++p)w.add("%02x",*p);w.add("\"}");}
@@ -131,10 +133,11 @@ struct Platform {
 axio::DashboardService<Platform> service(platform);
 axio::connectivity::ProvisioningSocket dashboardSocket;
 axio::DashboardHttp<decltype(dashboardSocket),decltype(service)> http(dashboardSocket,service);
-void closeServer(){http.close();serving=false;tried=false;}
+void closeServer(){http.close();serving=false;tried=false;setApHttpStatus(false);}
 }
 void setupDashboard(axio::TrackerState &state,axio::BnoDevice &device,void (*reset)(),uint64_t (*window)()){
   tracker=&state;sensor=&device;resetMetricsCallback=reset;windowCallback=window;
+  setApHttpClose(closeServer);
   uint8_t entropy[16];esp_fill_random(entropy,sizeof(entropy));
   const char *digits="0123456789abcdef";for(unsigned i=0;i<16;++i){sessionToken[2*i]=digits[entropy[i]>>4];sessionToken[2*i+1]=digits[entropy[i]&15];}sessionToken[32]=0;
   memset(entropy,0,sizeof(entropy));pinMode(BATTERY_ADC_PIN,INPUT);
@@ -156,13 +159,16 @@ void tickDashboard(bool allowWork){
   if(deferred==Nothing&&http.idle()&&!powerController.transitioning()&&strcmp(appliedId,oscConfiguration().id)){deferred=ApplyIdentity;deferredAt=millis();}
   if(!powerController.imuAllowed())allowWork=true;
   if(allowWork)measuredBattery.tick(millis(),[](){return analogReadMilliVolts(BATTERY_ADC_PIN);});
-  bool eligible=WiFi.status()==WL_CONNECTED&&uint32_t(WiFi.localIP())!=0&&!(WiFi.getMode()&WIFI_AP);
-  uint32_t address=uint32_t(WiFi.localIP()),now=millis();
-  if(serving&&(!eligible||address!=boundIp))closeServer();
+  bool ap=(WiFi.getMode()&WIFI_AP)!=0;
+  auto ipAddress=ap?WiFi.softAPIP():WiFi.localIP();
+  bool eligible=communicationsOff?false:ap?(WiFi.AP.started()&&uint32_t(ipAddress)!=0):(WiFi.status()==WL_CONNECTED&&uint32_t(ipAddress)!=0);
+  uint32_t address=uint32_t(ipAddress),now=millis();
+  if(serving&&(!eligible||address!=boundIp||ap!=boundAp))closeServer();
   if(!eligible||!allowWork)return;
   if(!serving&&(!tried||uint32_t(now-lastBind)>=1000)){
-    tried=true;lastBind=now;auto ipAddress=WiFi.localIP();uint8_t bytes[]={ipAddress[0],ipAddress[1],ipAddress[2],ipAddress[3]};
-    serving=dashboardSocket.open(bytes,AXIO_DASHBOARD_HTTP_PORT);boundIp=address;if(!serving)++httpFailures;
+    tried=true;lastBind=now;uint8_t bytes[]={ipAddress[0],ipAddress[1],ipAddress[2],ipAddress[3]};
+    serving=dashboardSocket.open(bytes,AXIO_DASHBOARD_HTTP_PORT);boundIp=address;boundAp=ap;if(!serving)++httpFailures;
+    setApHttpStatus(ap&&serving,ap&&!serving);
   }
   if(serving)http.tick(now);
 }

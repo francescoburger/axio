@@ -1,5 +1,24 @@
 # Axio
 
+**Aggiornamento UI (9 novembre 2026):** icona OSC viola, logo XYZ e solo Axio
+nell'header, vista Motion isometrica con assi che ruotano insieme al box
+(yaw su Y, pitch su X, roll su Z). Aggiornamento
+caricato sulla XIAO principale; configurazioni preservate.
+[Verifiche UI e limiti](docs/debug-round3-verification.md).
+
+**Correzioni aggiuntive (8 novembre 2026):** navigazione, titolo e batteria a
+larghezza finestra; rimosso Message 01; sezione Configuration Files e nomi
+Acknowledgement estesi. Risolto il rifiuto dei trigger numerici OSC da Pure Data.
+Revisione caricata sulla XIAO principale, impostazioni conservate.
+[Verifiche e limiti del collaudo](docs/debug-round2-verification.md).
+
+**Correzioni 001–005 (8 novembre 2026):** header a tutta finestra, badge superiore
+rimosso da tutte le schermate, stile Messages, terminologia Calibration e
+dashboard completa anche in AP. Revisione caricata sulla XIAO principale
+AC:27:6E:7E:32:38, con configurazioni conservate e verifiche USB/STA/browser;
+AP fisico ancora NOT RUN. Compatibilità e limiti in
+[correzioni dashboard](docs/debug-corrections-verification.md).
+
 **Fase 4:** dashboard LAN inglese con cinque schermate, editor OSC unico a
 intervalli ms, batteria A0/GPIO2 e controlli di alimentazione. Build installata
 e collaudata sulle XIAO disponibili; risultati e limiti in
@@ -63,12 +82,12 @@ AXIO 1 PING
 {"axio":1,"id":"1","ok":true,"data":{"pong":true}}
 ```
 
-Disponibili PING, INFO, STATUS, METRICS, TARE, CONFIG GET e DIAG RESET.
+Disponibili PING, INFO, STATUS, METRICS, CALIBRATION, CONFIG GET e DIAG RESET.
 WIFI GET/SET/DELETE gestiscono le reti; AP CREDENTIALS mostra SSID e password
 AP su richiesta USB. DISCOVERY GET legge i tracker presenti nella cache LAN,
 senza avviare una nuova scansione. Nessun routing OSC automatico dalla discovery.
 CONFIG VALIDATE controlla integralmente lo schema 1 senza applicarlo;
-CONFIG APPLY salva e attiva solo una configurazione valida. TARE cambia i riferimenti
+CONFIG APPLY salva e attiva solo una configurazione valida. CALIBRATION cambia i riferimenti
 in RAM; DIAG RESET azzera la finestra diagnostica. Nessun output periodico.
 Protocollo, limiti, memoria e risultati: [verifiche Fase 2](docs/phase2-verification.md).
 
@@ -82,7 +101,7 @@ python3 -m venv .venv
 # Sostituire con la porta verificata; non esegue upload o tara:
 .venv/bin/python -B tools/hardware_test.py --port /dev/cu.usbmodem2101 --metrics-seconds 10 --report captures/phase2-usb.json
 # Solo quando si desidera effettivamente tarare:
-.venv/bin/python -B tools/hardware_test.py --port /dev/cu.usbmodem2101 --tare --report captures/phase2-tare.json
+.venv/bin/python -B tools/hardware_test.py --port /dev/cu.usbmodem2101 --calibrate --report captures/calibration.json
 ```
 
 Senza porta o pyserial: NOT RUN, exit 2. Test falliti: exit 1. Report senza
@@ -193,16 +212,22 @@ timetag dei bundle sono conservati, senza pianificare la consegna. Supportati
 `i f s b h d T F N I`; altri tag e pacchetti malformati vengono registrati come
 errore con payload base64. Non è un'implementazione completa di OSC.
 
-Con il default `/tare`, per inviare la taratura sostituire l'IP della XIAO; il comando modifica
+Con il nuovo default `/calibration`, per inviare la calibrazione sostituire l'IP della XIAO; il comando modifica
 quaternion di riferimento e yaw nella RAM del dispositivo:
 
 ```sh
 AXIO_IP=192.168.1.50 python3 -B - <<'PY'
 import os, socket
 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-    sock.sendto(b'/tare\0\0\0,\0\0\0', (os.environ['AXIO_IP'], 16889))
+    sock.sendto(b'/calibration\0\0\0\0,\0\0\0', (os.environ['AXIO_IP'], 16889))
 PY
 ```
+
+Le configurazioni precedenti con `tare_address` sono lette senza cambiare
+l'indirizzo né l'ACK salvati; le risposte usano `calibration_address`.
+`TARE`, `--tare` e gli endpoint predefiniti precedenti restano alias di
+compatibilità. Per inviare a un indirizzo personalizzato usare quello restituito
+da CONFIG GET. Nessuna calibrazione automatica al boot o durante la migrazione.
 
 Analisi esatta e rischi: [docs/baseline-v1.1.md](docs/baseline-v1.1.md).
 Procedura e limiti delle misure: [docs/benchmarks.md](docs/benchmarks.md).

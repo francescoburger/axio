@@ -1,9 +1,9 @@
 #pragma once
 #include "../diagnostics/DiagnosticService.h"
-void setupOscRuntime(bool (*tare)());
+void setupOscRuntime(bool (*calibrate)());
 void tickOscRuntime(const axio::Sample &sample,uint64_t now);
 void pollOscRuntime();
-bool tareOscRuntime();
+bool calibrateOscRuntime();
 bool oscConfigCommand(const char *id,char *command,char *out);
 void resetOscMetrics();
 axio::RuntimeStatus oscRuntimeStatus();

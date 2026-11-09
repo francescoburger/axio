@@ -22,8 +22,8 @@ void prefs_setup() {
   prefs.end();
 }
 
-static void (*tareCallback)() = nullptr;
-void osctare(OSCMessage &msg) { (void)msg; tareCallback(); }
+static void (*calibrationCallback)() = nullptr;
+void oscCalibration(OSCMessage &msg) { (void)msg; calibrationCallback(); }
 void checkIncomingOSC() {
   int size = UDP.parsePacket();
   if (size > 0) {
@@ -32,7 +32,8 @@ void checkIncomingOSC() {
       msgIn.fill(UDP.read());
     }
     if (!msgIn.hasError()) {
-      msgIn.dispatch("/tare", osctare);
+      msgIn.dispatch("/calibration", oscCalibration);
+      msgIn.dispatch("/tare", oscCalibration); // Compatibility with existing OSC clients.
     }
   }
 }
@@ -71,8 +72,8 @@ void sendLegacySample(const axio::Sample &sample) {
   UDP.endPacket();
   bundle.empty();
 }
-void setupLegacyTransport(void (*tare)()) {
-  tareCallback = tare;
+void setupLegacyTransport(void (*calibrate)()) {
+  calibrationCallback = calibrate;
   prefs_setup();
 }
 axio::RuntimeStatus legacyRuntimeStatus() {

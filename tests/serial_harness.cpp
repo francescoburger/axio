@@ -22,7 +22,7 @@ struct Platform {
   Platform():manager(device,clock,tracker,calibration) { manager.begin(); manager.acquire(); }
   uint64_t nowUs() { return clock.nowUs(); }
   axio::RuntimeStatus status() { axio::RuntimeStatus s; s.heap=12345; return s; }
-  bool tare() { return manager.calibrateReference(); }
+  bool calibrate() { return manager.calibrateReference(); }
 };
 struct Port {
   std::string input,output;
@@ -71,14 +71,14 @@ int main(int argc,char **) {
     assert(burst.position==burst.input.size());
     assert(burst.output.find("unknown_command")!=std::string::npos);
     assert(burst.output.find("\"id\":\"burst\"")!=std::string::npos);
-    assert(platform.tare());
+    assert(platform.calibrate());
     assert(platform.calibration.quatOffset.x()==-.5 && platform.calibration.yawOffset==123);
     auto before=platform.calibration.quatOffset;
     platform.device.valid=false;
-    char command[]="TARE"; service.execute("failed",command,out);
+    char command[]="CALIBRATION"; service.execute("failed",command,out);
     assert(strstr(out,"imu_unavailable"));
     assert(platform.calibration.quatOffset.x()==before.x() && platform.calibration.yawOffset==123);
-    assert(platform.tracker.diagnostics.tareErrors==1);
+    assert(platform.tracker.diagnostics.calibrationErrors==1);
     std::cout << "PASS\n"; return 0;
   }
   char c;

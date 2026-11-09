@@ -4,3 +4,5 @@
 __pycache__/
 captures/
 firmware/Axio/build/
+/axio_codex_ui/
+/debug_requests/

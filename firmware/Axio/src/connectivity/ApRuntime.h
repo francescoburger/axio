@@ -10,3 +10,6 @@ void refreshApConfiguration();
 void setApTrackerId(const char *id);
 const char *apSsid();
 void stopApRuntime();
+// The full dashboard owns HTTP in both radio modes. No second AP portal.
+void setApHttpClose(void (*close)());
+void setApHttpStatus(bool active,bool failed=false);

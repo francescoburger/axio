@@ -78,8 +78,8 @@ template<class Network> class Engine {
       }
     }
   }
-  bool tare() {
-    if(!network.tare())return false;
+  bool calibrate() {
+    if(!network.calibrate())return false;
     if(config.ackEnabled) {
       char address[AddressSize];expand(config.ackAddress,config.id,address,sizeof(address));
       packet.size=0;packet.string(address);packet.string(",i");packet.integer(1);
@@ -88,9 +88,10 @@ template<class Network> class Engine {
     return true;
   }
   bool receive(const uint8_t *data,size_t size) {
-    char address[AddressSize];expand(config.tare,config.id,address,sizeof(address));
-    if(!tarePacket(data,size,address)){++metrics.malformed;return false;}
-    return tare();
+    char address[AddressSize];expand(config.calibrationAddress,config.id,address,sizeof(address));
+    if(!calibrationPacket(data,size,address) &&
+       !(calibrationAlias(config,address,sizeof(address))&&calibrationPacket(data,size,address))){++metrics.malformed;return false;}
+    return calibrate();
   }
 };
 }}
