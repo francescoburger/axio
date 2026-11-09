@@ -231,19 +231,41 @@ di tutte le varianti desktop/mobile. I riferimenti non sono stati modificati.
 
 ## Limiti e lavoro aperto
 
+- **Nuovo collaudo rete:** riavvio coordinato delle due XIAO su TIM PASS.
+  Dopo il FAIL GL con due owner è stata applicata la riconciliazione mediante
+  annunci nativi periodici. Nuova interruzione GL: STA/AP/IMU/OSC recuperati;
+  follow-up di 60 s PASS con un solo owner e discovery reciproca. Il primo
+  monitor aveva chiuso prima del browse reciproco, FAIL conservato. Resta
+  NOT RUN il ricongiungimento di due leader già attivi, non riprodotti nella
+  nuova prova. [Correzione e limiti](phase4-mdns-reconciliation.md).
+- **Calibrazione via OSC e acknowledgement: PASS manuale utente.** L'utente
+  conferma di averli già provati sul dispositivo e che funzionano. Non sono
+  richiesti nuovi comandi di calibrazione o ripetizioni per chiudere questo punto.
+  I NOT RUN dei rapporti debug precedenti descrivono le sessioni dell'agente,
+  non annullano questa verifica manuale successiva.
+- Endurance di un'ora eseguita: IMU, OSC e impostazioni verificati; FAIL
+  strumentale per errori HTTP. Limite con client concorrenti riprodotto con
+  sonda + browser e **accettato dall'utente**, che richiede di mantenere il
+  firmware invariato. Nessuna correzione o ripetizione del test è richiesta
+  per questo limite; dettagli in
+  [phase4-http-contention-verification.md](phase4-http-contention-verification.md).
 - **Aggiornamento 9 novembre 2026 — dashboard AP: PASS manuale utente.**
   L'utente riferisce di aver provato la dashboard su AP e che sembra funzionare
   bene. La verifica vale per l'uso della dashboard osservato dall'utente;
   provisioning, salvataggio reti e passaggio AP→STA non sono stati specificati.
   Le diciture AP reale NOT RUN nei rapporti precedenti descrivono le prove
   dell'agente in quelle sessioni e restano evidenze storiche.
+  Successivamente la secondaria è stata configurata dall'utente per TIM:
+  nuova rete presente insieme alla precedente e connessione STA effettiva
+  osservate nel collaudo mDNS, con impostazioni conservate.
 - `axio.local`: elezione, probing nativo e subentro integrati il 9 novembre,
   verificati sui due dispositivi senza un secondo responder o server centrale.
   Restano prove con tre XIAO, partizioni e perdita pacchetti controllata; dettagli
   in [phase4-entry-point-verification.md](phase4-entry-point-verification.md).
-- NOT RUN: endurance prolungata, potenza assorbita in sleep, accuratezza ADC con
+- NOT RUN: durata oltre l'ora già eseguita, potenza assorbita in sleep, accuratezza ADC con
   strumento esterno e curva SoC, stress radio/multi-client esteso, power-cut/NVS
-  fisico, tara/ACK fisici, perdita di pacchetti e zero duplicazioni garantiti.
+  fisico, perdita di pacchetti e zero duplicazioni garantiti. Il limite HTTP
+  concorrente è accettato: queste estensioni non richiedono di riaprire tale punto.
 - Apply rete e password AP: validazione, transazioni e fault injection PASS su
   host; modifica di credenziali/AP reali non forzata per non alterare le reti
   dell'utente. Fallback radio storico 3D non ricertificato integralmente in Fase 4.

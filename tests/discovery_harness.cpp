@@ -86,12 +86,23 @@ void election(){
   e.promoted(t+14000);assert(!e.leader());
   assert(e.tick(true,true,"axio",t+16999)==A::None&&!e.leader());
   assert(e.tick(true,true,"axio",t+17000)==A::None&&e.leader());
-  assert(e.tick(true,true,"axio-2",t+18000)==A::Demote&&e.conflicts==1&&!e.leader());
-  e.demoted(t+18000);assert(e.tick(true,false,"individual",t+22999)==A::None);
-  assert(e.tick(true,false,"individual",t+23000)==A::Lookup);
-  e.failed(t+23001);assert(e.failures==1);
-  assert(e.tick(false,true,"axio",t+23002)==A::Demote);
+  assert(e.tick(true,true,"axio",t+18999)==A::None);
+  assert(e.tick(true,true,"axio",t+19000)==A::Announce);
+  assert(e.tick(true,true,"axio",t+19001)==A::None);
+  assert(e.tick(true,true,"axio",t+600000)==A::Announce);
+  assert(e.tick(true,true,"axio",t+600001)==A::None); // no catch-up
+  assert(e.tick(true,true,"axio-2",t+600002)==A::Demote&&e.conflicts==1&&!e.leader());
+  e.demoted(t+600002);assert(e.tick(true,false,"individual",t+605001)==A::None);
+  assert(e.tick(true,false,"individual",t+605002)==A::Lookup);
+  e.failed(t+605003);assert(e.failures==1);
+  assert(e.tick(false,true,"axio",t+605004)==A::Demote);
   // A result arriving after radio loss cannot promote.
-  e.lookup(false,t+23003);assert(e.state()==EntryElection::State::Offline);
+  e.lookup(false,t+605005);assert(e.state()==EntryElection::State::Offline);
+  // Announcement deadline itself crosses millis() rollover.
+  t=0xfffffff0;e.promoted(t);
+  assert(e.tick(true,true,"axio",t+3000)==A::None&&e.leader());
+  assert(e.tick(true,true,"axio",t+4999)==A::None);
+  assert(e.tick(true,true,"axio",t+5000)==A::Announce);
+  assert(e.tick(false,true,"axio",t+10000)==A::Demote);
 }
 int main(int argc,char **argv){assert(argc==2);std::string name=argv[1];if(name=="names")names();else if(name=="cache")cache();else if(name=="capacity")capacity();else if(name=="lifecycle")lifecycle();else if(name=="pacing")pacing();else if(name=="failures")failures();else if(name=="election")election();else return 2;puts("PASS");}

@@ -20,12 +20,18 @@ struct Driver {
   mdns_search_once_t *search=nullptr;esp_netif_t *sta=nullptr;
   mdns_search_once_t *entrySearch=nullptr;bool censusQuery=false;
   char actualName[65]={};uint64_t entryQueries=0;
+  uint64_t announcements=0,announceFailures=0;
+  uint64_t resultRecords=0,emptyResults=0,incompleteResults=0,acceptedResults=0;
   bool initialized=false;const char *error=nullptr;
   uint32_t checkedName=0;uint64_t nameChanges=0,filtered=0;
   esp_err_t txt(const char *service,const char *proto,const char *key,const char *value){
     return commonMode?mdns_service_txt_item_set_for_host(hostname,service,proto,hostname,key,value):mdns_service_txt_item_set(service,proto,key,value);
   }
   bool pending()const{return search!=nullptr||entrySearch!=nullptr;}
+  void announce(){
+    if(sta&&mdns_netif_action(sta,MDNS_EVENT_ANNOUNCE_IP4)==ESP_OK)++announcements;
+    else {++announceFailures;error="mdns_announce_failed";}
+  }
   bool start(uint16_t port){
     if(mdns_init()!=ESP_OK){error="mdns_init_failed";return false;}
     initialized=true;sta=esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
@@ -113,7 +119,10 @@ struct Driver {
     // A zero wait budget is essential: queryService/query_ptr are synchronous.
     if(!mdns_query_async_get_results(search,0,&results,nullptr))return false;
     if(accept){unsigned visited=0;
+      if(!results)++emptyResults;
       for(auto r=results;r&&visited<MaxPeers;r=r->next,++visited){
+        ++resultRecords;
+        if(!r->hostname||!r->service_type||!r->proto||!r->txt||!r->txt_value_len||!r->addr)++incompleteResults;
         char hw[13]={},id[17]={};
         if(r->esp_netif!=sta||r->ip_protocol!=MDNS_IP_PROTOCOL_V4||!r->hostname||!r->service_type||!r->proto||
            strcmp(r->service_type,"_axio")||strcmp(r->proto,"_udp")||!metadata(*r,hw,id)){++filtered;continue;}
@@ -122,7 +131,7 @@ struct Driver {
           if(a->addr.type!=ESP_IPADDR_TYPE_V4)continue;
           uint8_t ip[4];memcpy(ip,&a->addr.u_addr.ip4.addr,4);
           if(a->addr.u_addr.ip4.addr==uint32_t(WiFi.localIP()))continue;
-          if(cache.observe(hw,r->hostname,ip,r->port,r->ttl,now,hardware)){cache.trackerId(hw,id);break;}
+          if(cache.observe(hw,r->hostname,ip,r->port,r->ttl,now,hardware)){cache.trackerId(hw,id);++acceptedResults;break;}
         }
       }
     }
@@ -166,6 +175,7 @@ void tickDiscovery(bool sta){
         action=entryAction;entryAction=EntryElection::Action::None;
         if(action==EntryElection::Action::Lookup||action==EntryElection::Action::Census){
           if(!driver.queryEntry(action==EntryElection::Action::Census))election.failed(now);
+        }else if(action==EntryElection::Action::Announce){driver.announce();
         }else{
           commonMode=action==EntryElection::Action::Promote;reconfigure=true;
           if(!commonMode)election.demoted(now);
@@ -189,7 +199,7 @@ void discoveryJson(char *out,size_t cap){
     (unsigned long long)manager.queryFailures,(unsigned long long)driver.filtered,(unsigned long long)manager.cache.rejected,(unsigned long long)manager.cache.overflow,
     (unsigned long long)driver.nameChanges,manager.reason,identityError?identityError:(driver.error?driver.error:""));
   size_t n=strlen(out);
-  if(n&&n<cap)snprintf(out+n-1,cap-n+1,",\"entry_state\":\"%s\",\"entry_owned\":%s,\"entry_queries\":%llu,\"entry_conflicts\":%llu,\"entry_failures\":%llu}",election.name(),discoveryEntryOwned()?"true":"false",(unsigned long long)driver.entryQueries,(unsigned long long)election.conflicts,(unsigned long long)election.failures);
+  if(n&&n<cap)snprintf(out+n-1,cap-n+1,",\"entry_state\":\"%s\",\"entry_owned\":%s,\"entry_queries\":%llu,\"entry_conflicts\":%llu,\"entry_failures\":%llu,\"announcements\":%llu,\"announce_failures\":%llu,\"result_records\":%llu,\"empty_results\":%llu,\"incomplete_results\":%llu,\"accepted_results\":%llu}",election.name(),discoveryEntryOwned()?"true":"false",(unsigned long long)driver.entryQueries,(unsigned long long)election.conflicts,(unsigned long long)election.failures,(unsigned long long)driver.announcements,(unsigned long long)driver.announceFailures,(unsigned long long)driver.resultRecords,(unsigned long long)driver.emptyResults,(unsigned long long)driver.incompleteResults,(unsigned long long)driver.acceptedResults);
 }
 bool discoveryCommand(const char *id,char *command,char *out){
   if(strcmp(command,"DISCOVERY GET"))return false;

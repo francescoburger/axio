@@ -189,6 +189,31 @@ class ConnectivityTests(unittest.TestCase):
             self.assertFalse(entry['entry_owned']);self.assertGreater(entry['entry_queries'],1)
             self.assertNotEqual(entry['entry_state'],'leader')
 
+    def test_entry_announcements_retry_failure_and_stop_offline(self):
+        rows=self.commands(['@ENTRY_ENABLE','@UP','@ENTRY_RUN','AXIO 1 STATUS',
+                            '@ENTRY_ANNOUNCE_FAIL','@ENTRY_RUN','AXIO 2 STATUS',
+                            '@DOWN','@ENTRY_RUN','AXIO 3 STATUS'])
+        entries=[r['data']['connectivity']['discovery_details'] for r in rows]
+        self.assertGreater(entries[0]['announcements'],0)
+        self.assertEqual(entries[1]['announcements'],entries[0]['announcements'])
+        self.assertGreater(entries[1]['announce_failures'],0)
+        self.assertLessEqual(entries[1]['announce_failures'],4)
+        self.assertTrue(entries[1]['entry_owned'])
+        self.assertEqual(entries[2]['announce_failures'],entries[1]['announce_failures'])
+
+    def test_discovery_counts_empty_partial_and_accepted_results(self):
+        for mode,accepted,incomplete in [('',1,0),('@DISC_NO_ADDRESS',0,1)]:
+            commands=['@UP','@DISC_ADVANCE']
+            if mode:commands.append(mode)
+            commands+=['@DISC_PEER','AXIO 1 STATUS']
+            entry=self.commands(commands)[0]['data']['connectivity']['discovery_details']
+            self.assertEqual(entry['result_records'],1)
+            self.assertEqual(entry['accepted_results'],accepted)
+            self.assertEqual(entry['incomplete_results'],incomplete)
+        entry=self.commands(['@UP','@DISC_ADVANCE','@DISC_ADVANCE','AXIO 1 STATUS'])[0]['data']['connectivity']['discovery_details']
+        self.assertEqual(entry['empty_results'],1)
+        self.assertEqual(entry['result_records'],0)
+
     def test_entry_runtime_failed_alias_never_reports_ownership(self):
         rows=self.commands(['@ENTRY_ENABLE','@ENTRY_ALIAS_FAIL','@UP','@ENTRY_RUN','AXIO 1 STATUS'])
         entry=rows[0]['data']['connectivity']['discovery_details']

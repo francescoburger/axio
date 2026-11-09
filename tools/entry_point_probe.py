@@ -86,6 +86,11 @@ def http_snapshot(address, host=None):
         connection.close()
 
 
+def single_reported_owner(observation):
+    return sum(bool(d['status']['connectivity'].get('discovery_details', {}).get('entry_owned'))
+               for d in observation['devices'].values()) == 1
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', action='append', required=True)
@@ -140,6 +145,7 @@ def main():
             'configuration_preserved': all(d['configuration_preserved'] for d in report['devices'].values()),
             'no_observed_multiple_a_records': all(len(o['dns']) <= 1 for o in observations),
             'final_single_a_record': len(final['dns']) == 1,
+            'final_single_reported_owner': single_reported_owner(final),
             'final_owner_http': any(d.get('common_http', {}).get('status') == 200 for d in final['devices'].values()),
         }
         report['tests'] = [{'name': name, 'result': 'PASS' if passed else 'FAIL'} for name, passed in checks.items()]

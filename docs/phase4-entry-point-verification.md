@@ -1,5 +1,14 @@
 # Fase 4 — elezione del punto d'accesso comune
 
+**Aggiornamento successivo:** il riavvio coordinato su TIM è PASS; dopo una
+perdita/ritorno della rete GL sono stati osservati due owner del nome comune
+e discovery finale assente sul firmware precedente. Dopo la correzione con
+annunci nativi periodici, una nuova interruzione GL e il follow-up mostrano
+un solo owner e discovery reciproca. In questa ripetizione non si sono
+formati due leader: il ricongiungimento di una coppia già in conflitto resta
+NOT RUN. [Correzione e limiti](phase4-mdns-reconciliation.md),
+[rapporto rete precedente](phase4-network-verification.md).
+
 9 novembre 2026. Integrazione installata e verificata sulle due XIAO, con
 subentro automatico in entrambe le direzioni. Le prove del prototipo restano
 separate da quelle del firmware Axio completo.

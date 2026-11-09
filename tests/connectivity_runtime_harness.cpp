@@ -37,6 +37,8 @@ int main(){
     if(line=="@ENTRY_NO_OWNER"){fakeMdns().entryOwner=false;continue;}
     if(line=="@ENTRY_SMALLER"){fakeMdns().entrySmaller=true;continue;}
     if(line=="@ENTRY_ALIAS_FAIL"){fakeMdns().failAlias=true;continue;}
+    if(line=="@ENTRY_ANNOUNCE_FAIL"){fakeMdns().failAnnounce=true;continue;}
+    if(line=="@DISC_NO_ADDRESS"){fakeMdns().noAddress=true;continue;}
     if(line=="@ENTRY_CONFLICT"){fakeMdns().hostname="axio-2";fakeMillis()+=100;tickConnectivity();continue;}
     if(line=="@ENTRY_RUN"){for(unsigned i=0;i<2000;++i){fakeMillis()+=10;tickConnectivity();}continue;}
     if(line=="@DOWN"){WiFi.link=0;tickConnectivity();pollOscRuntime();assert(fakeUdp().bound.empty());continue;}

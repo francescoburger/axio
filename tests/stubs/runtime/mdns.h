@@ -4,7 +4,7 @@
 #include <string>
 constexpr int ESP_ERR_NOT_FOUND=-3,ESP_IPADDR_TYPE_V4=0,MDNS_IP_PROTOCOL_V4=0,MDNS_TYPE_PTR=12,MDNS_TYPE_A=1;
 using esp_err_t=int;
-enum mdns_event_actions_t {MDNS_EVENT_ENABLE_IP4=2,MDNS_EVENT_DISABLE_IP4=32,MDNS_EVENT_DISABLE_IP6=64};
+enum mdns_event_actions_t {MDNS_EVENT_ENABLE_IP4=2,MDNS_EVENT_ANNOUNCE_IP4=8,MDNS_EVENT_DISABLE_IP4=32,MDNS_EVENT_DISABLE_IP6=64};
 struct esp_netif_t {bool station;};
 inline esp_netif_t *esp_netif_get_handle_from_ifkey(const char *key){static esp_netif_t sta{true},ap{false};return !strcmp(key,"WIFI_STA_DEF")?&sta:&ap;}
 struct mdns_txt_item_t {const char *key,*value;};
@@ -22,14 +22,17 @@ struct FakeMdns {
   std::string hostname,instance,model,schema,hw;
   std::string queryKind,delegatedHost;
   uint32_t queryTimeout=2000;
-  bool entryOwner=false,entrySmaller=false,failAlias=false;
+  bool entryOwner=false,entrySmaller=false,failAlias=false,failAnnounce=false,noAddress=false;
+  unsigned announcements=0;
   mdns_search_once_t handle;mdns_result_t result;mdns_ip_addr_t address;mdns_txt_item_t txt[3];uint8_t lengths[3]={4,1,12};
 };
 inline FakeMdns &fakeMdns(){static FakeMdns m;return m;}
 inline int mdns_init(){auto &m=fakeMdns();if(m.failInit)return -1;assert(!m.initialized);m.delegatedHost.clear();m.initialized=true;m.staRemoved=m.apRemoved=false;++m.starts;return ESP_OK;}
 inline void mdns_free(){auto &m=fakeMdns();assert(!m.hasQuery);m.initialized=false;++m.frees;}
 inline int mdns_unregister_netif(esp_netif_t *n){if(n->station)fakeMdns().staRemoved=true;else fakeMdns().apRemoved=true;return ESP_OK;}
-inline int mdns_netif_action(esp_netif_t *,mdns_event_actions_t){return ESP_OK;}
+inline int mdns_netif_action(esp_netif_t *netif,mdns_event_actions_t action){
+  if(action==MDNS_EVENT_ANNOUNCE_IP4){assert(netif->station&&fakeMdns().initialized&&!fakeMdns().staRemoved);++fakeMdns().announcements;if(fakeMdns().failAnnounce)return -1;}return ESP_OK;
+}
 inline int mdns_hostname_set(const char *name){fakeMdns().hostname=name;return ESP_OK;}
 inline int mdns_hostname_get(char *out){strcpy(out,fakeMdns().hostname.c_str());return ESP_OK;}
 inline int mdns_instance_name_set(const char *name){fakeMdns().instance=name;return ESP_OK;}
@@ -53,7 +56,7 @@ inline bool mdns_query_async_get_results(mdns_search_once_t *,uint32_t timeout,m
     m.result.hostname=const_cast<char *>("axio-aabbccddeeff");m.result.service_type=const_cast<char *>("_axio");m.result.proto=const_cast<char *>("_udp");
     m.txt[0]={"model","Axio"};m.txt[1]={"schema",m.badSchema?"2":"1"};m.txt[2]={"hw","aabbccddeeff"};
     m.result.txt=m.txt;m.result.txt_value_len=m.lengths;m.result.txt_count=3;
-    uint8_t ip[4]={192,168,1,42};memcpy(&m.address.addr.u_addr.ip4.addr,ip,4);m.result.addr=&m.address;*out=&m.result;
+    uint8_t ip[4]={192,168,1,42};memcpy(&m.address.addr.u_addr.ip4.addr,ip,4);m.result.addr=m.noAddress?nullptr:&m.address;*out=&m.result;
   }
   if((m.entryOwner&&m.queryKind=="a")||(m.entrySmaller&&m.queryKind=="_axio-entry")){
     m.result=mdns_result_t();m.result.esp_netif=esp_netif_get_handle_from_ifkey(m.fromAp?"WIFI_AP_DEF":"WIFI_STA_DEF");

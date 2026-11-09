@@ -5,10 +5,20 @@ import struct
 import sys
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-from entry_point_probe import a_records, dns_name
+from entry_point_probe import a_records, dns_name, single_reported_owner
 
 
 class EntryPointProbeTests(unittest.TestCase):
+    def test_one_dns_answer_does_not_prove_single_ownership(self):
+        def device(owned):
+            return {'status': {'connectivity': {'discovery_details': {'entry_owned': owned}}}}
+        observation = {'dns': ['192.168.8.159'], 'devices': {'a': device(True), 'b': device(True)}}
+        self.assertFalse(single_reported_owner(observation))
+        observation['devices']['b'] = device(False)
+        self.assertTrue(single_reported_owner(observation))
+        observation['devices']['a'] = device(False)
+        self.assertFalse(single_reported_owner(observation))
+
     def packet(self, ttl=120, cls=0x8001):
         name = b'\x04axio\x05local\0'
         question = name + struct.pack('!HH', 1, 1)

@@ -1,5 +1,10 @@
 # Correzioni aggiuntive UI e comando OSC numerico — 8 novembre 2026
 
+Aggiornamento successivo: calibrazione via OSC e acknowledgement fisici
+confermati funzionanti dall'utente; PASS manuale riportato in
+[phase4-verification.md](phase4-verification.md). I NOT RUN qui sotto restano
+il resoconto delle sole prove dell'agente in questa sessione storica.
+
 Richieste dell'utente e screenshot `debug_requests/images/correzione_006.png`
 e `correzione_007.png`. Questa revisione sostituisce il precedente requisito
 di mantenere la navigazione alla larghezza del contenuto: ora entrambe le barre,

@@ -7,11 +7,11 @@ namespace axio { namespace connectivity {
 // No decision is based on the long-lived discovery cache.
 class EntryElection {
  public:
-  enum class Action { None, Lookup, Census, Promote, Demote };
+  enum class Action { None, Lookup, Census, Promote, Demote, Announce };
   enum class State { Offline, Waiting, Lookup, CensusWait, Census, ConfirmWait, Confirm, Switching, Probing, Leader, Retreat };
  private:
   State state_=State::Offline;
-  uint32_t since_=0,delay_=0;
+  uint32_t since_=0,delay_=0,announced_=0;
   unsigned misses_=0;
   void wait(uint32_t now,uint32_t delay){state_=State::Waiting;since_=now;delay_=delay;}
  public:
@@ -38,6 +38,9 @@ class EntryElection {
     if(state_==State::Retreat)return Action::Demote;
     if(state_==State::Switching)return Action::Promote;
     if(state_==State::Probing&&uint32_t(now-since_)>=3000)state_=State::Leader;
+    // Keep native conflict detection alive after a partition heals. Pace from
+    // now, including failed attempts, so a delayed tick never catches up.
+    if(state_==State::Leader&&uint32_t(now-announced_)>=5000){announced_=now;return Action::Announce;}
     if(state_==State::Waiting&&uint32_t(now-since_)>=delay_){state_=State::Lookup;return Action::Lookup;}
     if(state_==State::CensusWait){state_=State::Census;return Action::Census;}
     if(state_==State::ConfirmWait){state_=State::Confirm;return Action::Lookup;}
@@ -55,7 +58,7 @@ class EntryElection {
     if(smallerCandidate){misses_=0;wait(now,1500);}
     else state_=State::ConfirmWait;
   }
-  void promoted(uint32_t now){state_=State::Probing;since_=now;misses_=0;}
+  void promoted(uint32_t now){state_=State::Probing;since_=announced_=now;misses_=0;}
   void demoted(uint32_t now){misses_=0;wait(now,5000);}
   void failed(uint32_t now){++failures;misses_=0;wait(now,5000);}
 };
