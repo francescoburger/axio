@@ -8,6 +8,7 @@
 #include "src/connectivity/ConnectivityRuntime.h"
 #include "src/diagnostics/UsbDiagnostics.h"
 #include "src/web/DashboardRuntime.h"
+#include "src/power/WakeHold.h"
 #if !ARDUINO_USB_CDC_ON_BOOT
 #error "Axio USB diagnostics require USB CDC On Boot: Enabled"
 #endif
@@ -36,6 +37,7 @@ axio::DiagnosticService<DiagnosticPlatform> diagnosticService(tracker, diagnosti
 axio::UsbDiagnostics<decltype(diagnosticService)> usbDiagnostics(diagnosticService);
 
 void setup() {
+  qualifyButtonWake();
   setCpuFrequencyMhz(160);
   prepareDashboardFlashInfo();
   Serial.setRxBufferSize(decltype(usbDiagnostics)::RxCapacity);

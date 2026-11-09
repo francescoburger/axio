@@ -53,7 +53,7 @@ int main(){
   assert(power.request(true,0));power.tick(0);power.tick(99);assert(hw.op==12&&power.imuAllowed());
   power.tick(100);assert(hw.op==0&&!power.imuAllowed());power.tick(124);assert(hw.power==0);
   power.tick(125);assert(hw.power==2&&hw.stopped==0);power.tick(144);assert(hw.stopped==0);
-  power.tick(145);power.tick(146);assert(hw.stopped==1&&hw.slept==1);
+  power.tick(145);power.tick(146);power.tick(147);power.tick(247);assert(hw.stopped==1&&hw.slept==1);
   // Held button, unsupported wake, I2C errors and delayed shutdown never enter sleep.
   SensorPower held;held.pressedValue=true;axio::PowerController<SensorPower> a(held);
   a.request(true,0);a.tick(3000);assert(a.error&&held.op==12&&held.slept==0);
@@ -72,13 +72,24 @@ int main(){
   SensorPower physical;axio::SleepButton button;axio::PowerController<SensorPower> f(physical);
   auto tickButton=[&](uint32_t now,bool pressed){
     physical.pressedValue=pressed;
-    if(button.tick(now,pressed,!f.busy()))assert(f.request(true,now));
+    if(button.tick(now,pressed,!f.busy())==axio::SleepButton::Sleep)assert(f.request(true,now,false));
     f.tick(now);
   };
   tickButton(0,false);tickButton(30,false);tickButton(100,true);tickButton(130,true);
-  tickButton(3100,true);tickButton(10000,true);assert(!f.busy()&&physical.op==12);
-  tickButton(10010,false);tickButton(10040,false);assert(f.busy()&&physical.slept==0);
-  tickButton(10140,false);tickButton(10165,false);tickButton(10185,false);tickButton(10186,false);
-  assert(physical.slept==1&&physical.power==2&&physical.stopped==1);
+  tickButton(5099,true);assert(!f.busy()&&physical.op==12);
+  tickButton(5100,true);assert(f.busy()&&physical.op==0&&physical.slept==0);
+  tickButton(5125,true);tickButton(5145,true);tickButton(5146,true);
+  assert(physical.pressedValue&&physical.slept==0&&physical.power==2&&physical.stopped==1);
+  tickButton(10000,true);assert(!f.imuAllowed()&&physical.slept==0&&physical.stopped==1);
+  tickButton(10010,false);tickButton(10050,true); // release bounce cannot enter sleep
+  tickButton(10060,false);tickButton(10159,false);assert(physical.slept==0);
+  tickButton(10160,false);assert(physical.slept==1&&physical.stopped==1);
+  // Wake configuration can fail after shutdown; restore the sensor and radio.
+  SensorPower late;axio::PowerController<SensorPower> g(late);
+  late.pressedValue=true;assert(g.request(true,0,false));g.tick(0);g.tick(25);g.tick(45);
+  g.tick(46);assert(late.stopped==1&&late.power==2&&late.slept==0);
+  late.pressedValue=false;g.tick(50);late.wake=false;g.tick(150);
+  assert(g.error&&late.slept==0&&late.resumed==1);
+  g.tick(175);g.tick(200);assert(g.imuAllowed()&&late.power==0&&late.op==12);
   puts("PASS");
 }

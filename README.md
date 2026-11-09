@@ -1,5 +1,24 @@
 # Axio
 
+**Recupero accensione:** segnalato blocco del wake nella revisione round 5.
+Correzione software: wake LOW, sensore/rete fermi a 5 s e ingresso nel deep sleep
+dopo il rilascio stabile. Firmware caricato sulla XIAO principale; ciclo fisico
+di spegnimento e riaccensione confermato funzionante dall'utente.
+[Stato del recupero](docs/wake-recovery-verification.md).
+
+**Pulsante e istruzioni aggiornati:** soglia interna di accensione 1,6 s,
+istruzioni utente di circa 3 s; spegnimento avviato a 5 s senza attendere il
+rilascio. Istruzioni di calibrazione spostate in Motion.
+[Verifiche e limiti della nuova revisione](docs/debug-round5-verification.md).
+
+**Ulteriori correzioni di debug (9 novembre 2026):** link ai peer in nuova scheda,
+slash incorporati nei campi OSC e avvisi per modifiche non salvate. Per la logica
+aggiornata del pulsante, vedere la revisione riportata sopra. Implementazione e
+verifiche software completate; firmware caricato sulla XIAO principale con
+IMU/STA/HTTP e conservazione delle configurazioni verificati. Durate fisiche del
+pulsante e wake da sleep ancora NOT RUN.
+[Verifiche e limiti](docs/debug-round4-verification.md).
+
 **Aggiornamento mDNS (9 novembre 2026):** `http://axio.local` integrato con
 elezione automatica e subentro, verificati sulle due XIAO. Hostname individuali,
 reti e impostazioni OSC conservati; principale con IMU, secondaria senza IMU.

@@ -10,4 +10,6 @@ struct FakeSerial {
 };
 extern FakeSerial Serial;
 extern unsigned long waited;
+#ifndef AXIO_FAKE_RUNTIME_ARDUINO
 inline void delay(unsigned long ms) { waited+=ms; }
+#endif

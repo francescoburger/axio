@@ -20,6 +20,7 @@
 #include "../power/Battery.h"
 #include "../power/PowerController.h"
 #include "../power/SleepButton.h"
+#include "../power/WakeHold.h"
 #include "../connectivity/ProvisioningSocket.h"
 #include "../connectivity/ConnectivityRuntime.h"
 #include "../connectivity/ConnectivityManager.h"
@@ -44,8 +45,7 @@ void closeServer();
 struct PowerPlatform {
   bool pressed(){return digitalRead(BUTTON_PIN)==BUTTON_ACTIVE_LEVEL;}
   bool prepareWake(){
-    pinMode(BUTTON_PIN,INPUT_PULLUP);
-    return esp_deep_sleep_enable_gpio_wakeup(uint64_t(1)<<BUTTON_PIN,ESP_GPIO_WAKEUP_GPIO_LOW)==ESP_OK;
+    return prepareButtonSleep();
   }
   bool read(uint8_t reg,uint8_t &value){return sensor->powerRead(reg,value);}
   bool write(uint8_t reg,uint8_t value){return sensor->powerWrite(reg,value);}
@@ -151,8 +151,9 @@ void setupDashboard(axio::TrackerState &state,axio::BnoDevice &device,void (*res
 bool dashboardImuAllowed(){return powerController.imuAllowed();}
 void tickDashboard(bool allowWork){
   const uint32_t buttonNow=millis();
-  if(sleepButton.tick(buttonNow,powerPlatform.pressed(),deferred==Nothing&&!powerController.busy()&&tracker->sensor==axio::SensorStatus::Ready))
-    powerController.request(true,buttonNow);
+  const auto buttonEvent=sleepButton.tick(buttonNow,powerPlatform.pressed(),deferred==Nothing&&!powerController.busy()&&tracker->sensor==axio::SensorStatus::Ready);
+  if(buttonEvent==axio::SleepButton::Sleep)powerController.request(true,buttonNow,false);
+  else if(buttonEvent==axio::SleepButton::Calibrate)calibrateOscRuntime();
   powerController.tick(millis());
   if(deferred!=Nothing&&uint32_t(millis()-deferredAt)>=150){
     Deferred action=deferred;deferred=Nothing;

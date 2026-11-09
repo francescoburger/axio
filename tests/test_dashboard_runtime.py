@@ -44,7 +44,7 @@ class DashboardHttpCase:
             try:
                 last=self.snapshot()
                 if predicate(last):return last
-            except (ConnectionError,OSError):pass
+            except (ConnectionError,OSError,http.client.IncompleteRead):pass
             time.sleep(.05)
         self.fail('Runtime transition timed out: '+repr(last))
 
@@ -132,7 +132,7 @@ class DashboardRuntimeTests(DashboardHttpCase,unittest.TestCase):
         before=self.snapshot();self.assertEqual(self.post('/api/command',{'command':'DIAG RESET'})[0],200)
         after=self.snapshot();self.assertEqual(after['osc'],before['osc']);self.assertEqual(after['network']['networks'],before['network']['networks'])
     def test_physical_button_suspends_sensor_without_network_or_browser(self):
-        result=subprocess.run([str(self.binary),'--sleep-button-offline'],capture_output=True,text=True,timeout=5)
+        result=subprocess.run([str(self.binary),'--sleep-button-offline'],capture_output=True,text=True,timeout=8)
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertIn('PASS: physical long press',result.stdout)
 

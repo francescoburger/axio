@@ -3,6 +3,7 @@
 #include <algorithm>
 #include "src/power/Battery.h"
 #include "src/power/SleepButton.h"
+#include "src/power/WakeHold.h"
 #include "src/web/ImageSize.h"
 #include "src/web/DashboardHttp.h"
 struct Socket {
@@ -31,30 +32,57 @@ int main(){
   assert(reads==16 && battery.available && battery.voltage>3.899 && battery.voltage<3.901);
   // Wraparound does not cause a burst of ADC reads.
   axio::Battery wrap;reads=0;wrap.tick(0xfffffff0,adc);wrap.tick(20,adc);assert(reads==1);wrap.tick(47,adc);assert(reads==2);
-  // Boot/wake while held never requests sleep, regardless of hold duration.
-  axio::SleepButton button;
-  assert(!button.tick(0,true,true));assert(!button.tick(5000,true,true));
-  assert(!button.tick(5010,false,true));assert(!button.tick(5040,false,true));
-  // Short press and contact bounce do not confirm the command.
-  assert(!button.tick(5100,true,true));assert(!button.tick(5110,false,true));
-  assert(!button.tick(5140,false,true));assert(!button.tick(5200,true,true));
-  assert(!button.tick(5230,true,true));assert(!button.tick(8199,false,true));
-  assert(!button.tick(8229,false,true)); // 2999 ms, below threshold.
-  assert(!button.tick(8300,true,true));assert(!button.tick(8330,true,true));
-  assert(!button.tick(11300,true,true)); // Reaching 3 s while held does not sleep.
-  assert(!button.tick(11300,false,true));assert(!button.tick(11329,false,true));
-  assert(button.tick(11330,false,true));assert(!button.tick(11400,false,true));
-  // A gesture spanning a busy/error state is discarded; require a new press.
-  assert(!button.tick(12000,true,true));assert(!button.tick(12030,true,true));
-  assert(!button.tick(13000,true,false));assert(!button.tick(15000,true,true));
-  assert(!button.tick(15100,false,true));assert(!button.tick(15130,false,true));
-  assert(!button.tick(15200,true,true));assert(!button.tick(15230,true,true));
-  assert(!button.tick(18200,false,true));assert(button.tick(18230,false,true));
-  // Unsigned time wrap preserves both debounce and exact long-press threshold.
-  axio::SleepButton buttonWrap;
-  assert(!buttonWrap.tick(0xffffff00,false,true));assert(!buttonWrap.tick(0xffffff1e,false,true));
-  assert(!buttonWrap.tick(0xffffff40,true,true));assert(!buttonWrap.tick(0xffffff5e,true,true));
-  assert(!buttonWrap.tick(2808,false,true));assert(buttonWrap.tick(2838,false,true));
+  using Button=axio::SleepButton;
+  Button button;
+  assert(button.tick(0,true,true)==Button::None);
+  assert(button.tick(7000,true,true)==Button::None);
+  assert(button.tick(7010,false,true)==Button::None);
+  assert(button.tick(7040,false,true)==Button::None); // wake release ignored
+  auto press=[&](uint32_t start,uint32_t duration,Button::Event expected){
+    assert(button.tick(start,true,true)==Button::None);
+    assert(button.tick(start+30,true,true)==Button::None);
+    if(duration>=Button::HoldMs){
+      assert(button.tick(start+Button::HoldMs-1,true,true)==Button::None);
+      assert(button.tick(start+Button::HoldMs,true,true)==Button::Sleep);
+      assert(button.tick(start+duration,true,true)==Button::None);
+    }
+    assert(button.tick(start+duration,false,true)==Button::None);
+    assert(button.tick(start+duration+29,false,true)==Button::None);
+    assert(button.tick(start+duration+30,false,true)==(duration>=Button::HoldMs?Button::None:expected));
+    assert(button.tick(start+duration+60,false,true)==Button::None);
+  };
+  // Bounce, short press, exact sleep boundary and no duplicate events.
+  assert(button.tick(7100,true,true)==Button::None);
+  assert(button.tick(7110,false,true)==Button::None);
+  assert(button.tick(7140,false,true)==Button::None);
+  press(7200,100,Button::Calibrate);
+  press(7500,4999,Button::Calibrate);
+  press(13000,5000,Button::Sleep);
+  assert(button.tick(19000,true,true)==Button::None);
+  assert(button.tick(19030,true,true)==Button::None);
+  assert(button.tick(20000,true,false)==Button::None);
+  assert(button.tick(25000,true,true)==Button::None);
+  assert(button.tick(25100,false,true)==Button::None);
+  assert(button.tick(25130,false,true)==Button::None); // busy gesture discarded
+  press(26000,5001,Button::Sleep);
+  Button wrapButton;
+  assert(wrapButton.tick(0xffffff00,false,true)==Button::None);
+  assert(wrapButton.tick(0xffffff1e,false,true)==Button::None);
+  assert(wrapButton.tick(0xffffff40,true,true)==Button::None);
+  assert(wrapButton.tick(0xffffff5e,true,true)==Button::None);
+  assert(wrapButton.tick(4808,false,true)==Button::None);
+  assert(wrapButton.tick(4838,false,true)==Button::Sleep);
+  axio::WakeHold wake;
+  assert(wake.tick(900000,true)==axio::WakeHold::Waiting); // includes boot
+  assert(wake.tick(1599999,false)==axio::WakeHold::Waiting);
+  assert(wake.tick(1629999,false)==axio::WakeHold::Rejected);
+  axio::WakeHold accepted;
+  assert(accepted.tick(1599999,true)==axio::WakeHold::Waiting);
+  assert(accepted.tick(1600000,true)==axio::WakeHold::Accepted);
+  axio::WakeHold bounce;
+  assert(bounce.tick(1000000,false)==axio::WakeHold::Waiting);
+  assert(bounce.tick(1001000,true)==axio::WakeHold::Waiting);
+  assert(bounce.tick(1600000,true)==axio::WakeHold::Accepted);
   for(unsigned mode=0;mode<6;++mode) {
     Socket socket;Service service;axio::DashboardHttp<Socket,Service> http(socket,service);
     const char *host=mode==1?"evil.test":"192.168.1.15";

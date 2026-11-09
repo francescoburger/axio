@@ -7,7 +7,7 @@ def build(port=17884):
     binary=ROOT/'.build/tests/dashboard_runtime'
     binary.parent.mkdir(parents=True,exist_ok=True)
     library=Path.home()/'Documents/Arduino/libraries/Adafruit_BNO055'
-    paths=['tests/dashboard_runtime_harness.cpp','firmware/Axio/src/web/DashboardRuntime.cpp',
+    paths=['tests/dashboard_runtime_harness.cpp','firmware/Axio/src/power/WakeRuntime.cpp','firmware/Axio/src/web/DashboardRuntime.cpp',
            'firmware/Axio/src/connectivity/ConnectivityRuntime.cpp','firmware/Axio/src/connectivity/ApRuntime.cpp',
            'firmware/Axio/src/connectivity/DiscoveryRuntime.cpp','firmware/Axio/src/transport/OscRuntime.cpp']
     command=[shutil.which('c++'),'-std=c++11','-Wall','-Wextra','-Werror','-Wno-misleading-indentation',

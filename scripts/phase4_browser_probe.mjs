@@ -91,6 +91,8 @@ try {
   const brand=await evaluate(`({text:document.querySelector('.mast h1').textContent.trim(),logo:!!document.querySelector('.brand-mark path'),oldPageTitle:!!document.querySelector('#pagetitle'),navActive:document.querySelector('.nav a.active')?.dataset.page})`);
   if(brand.text!=='Axio'||!brand.logo||brand.oldPageTitle||brand.navActive!==page)throw Error('Axio brand/navigation '+JSON.stringify(brand));
   if(page==='overview'){
+   const sleepHelp=await evaluate(`document.querySelector('#sleep').closest('.control').textContent`);
+   if(!sleepHelp.includes('Hold the Axio button for 5 seconds to sleep')||!sleepHelp.includes('about 3 seconds to wake')||/calibrat|1\\.[68]|release/i.test(sleepHelp))throw Error('Sleep instructions '+sleepHelp);
    const oscIcon=await evaluate(`(()=>{const icon=document.querySelector('.osc-icon');return {color:icon?getComputedStyle(icon).color:null,stroke:icon?.getAttribute('stroke'),label:icon?.closest('.stat').querySelector('strong').textContent};})()`);
    if(oscIcon.color!=='rgb(100, 32, 172)'||oscIcon.stroke!=='currentColor'||oscIcon.label!=='OSC')throw Error('OSC icon '+JSON.stringify(oscIcon));
   }
@@ -110,7 +112,7 @@ try {
   if(page==='motion') {const live=await evaluate(`document.querySelector('#stream-status').textContent==='Live'&&document.querySelector('#stream-status').closest('.card')!==null`);if(!live)throw Error('Sensor stream state missing');const hidden=await evaluate(`document.querySelector('#show-3d').click();document.querySelector('#advanced').hidden`);if(!hidden)throw Error('Quaternion/3D visibility');}
   if(page==='osc'){
    const count=await evaluate(`document.querySelector('#ack-enabled').checked=true;document.querySelector('#ack-enabled').dispatchEvent(new Event('change'));document.querySelector('#ack-settings').hidden`);if(count)throw Error('Acknowledgement visibility');
-   const editor=await evaluate(`(()=>{const initial=state.osc,field=document.querySelector('#calibration-address'),previewStyle=getComputedStyle(document.querySelector('.message-preview')),transfer=document.querySelector('.config-transfer'),ack=document.querySelector('#ack-settings');return {address:field.value,expected:initial.calibration_address,preview:document.querySelector('.preview-lines').textContent,expectedPreview:editorMessages(initial.editor,state.device.id).map(m=>m.address+'  '+m.fields.join(', ')).join('\\n'),left:previewStyle.borderLeftWidth,right:previewStyle.borderRightWidth,radius:previewStyle.borderRadius,numberedMessage:!!document.querySelector('.message-heading'),transferTitle:document.querySelector('#transfer-title')?.textContent,transferGap:transfer.getBoundingClientRect().top-ack.getBoundingClientRect().bottom,abbreviatedAcknowledgement:/\\bACK\\b/.test(document.querySelector('main').textContent)};})()`);
+   const editor=await evaluate(`(()=>{const initial=state.osc,field=document.querySelector('#calibration-address'),previewStyle=getComputedStyle(document.querySelector('.message-preview')),transfer=document.querySelector('.config-transfer'),ack=document.querySelector('#ack-settings');return {address:fullAddress('calibration-address'),expected:initial.calibration_address,preview:document.querySelector('.preview-lines').textContent,expectedPreview:editorMessages(initial.editor,state.device.id).map(m=>m.address+'  '+m.fields.join(', ')).join('\\n'),left:previewStyle.borderLeftWidth,right:previewStyle.borderRightWidth,radius:previewStyle.borderRadius,numberedMessage:!!document.querySelector('.message-heading'),transferTitle:document.querySelector('#transfer-title')?.textContent,transferGap:transfer.getBoundingClientRect().top-ack.getBoundingClientRect().bottom,abbreviatedAcknowledgement:/\\bACK\\b/.test(document.querySelector('main').textContent)};})()`);
    if(editor.address!==editor.expected||editor.preview!==editor.expectedPreview||editor.left!==editor.right||editor.radius==='0px'||editor.numberedMessage||!editor.transferTitle||editor.transferGap<16||editor.abbreviatedAcknowledgement)throw Error('OSC editor presentation '+JSON.stringify(editor));
    const dynamic=await evaluate(`(()=>{const expected=structuredClone(state.osc.editor),chip=document.querySelector('[data-group="0"][data-bit="0"]');expected.selected[0]^=1;chip.click();const actual=document.querySelector('.preview-lines').textContent,wanted=editorMessages(expected,state.device.id).map(m=>m.address+'  '+m.fields.join(', ')).join('\\n');chip.click();return actual===wanted;})()`);
    if(!dynamic)throw Error('Dynamic OSC preview changed');
@@ -125,6 +127,8 @@ try {
     await evaluate(`document.querySelector('#restart').click()`);await evaluate(`document.querySelector('#sleep').click()`);
    }
    if(page==='motion'){
+   const calibrationHelp=await evaluate(`document.querySelector('#calibrate').closest('.content').textContent`);
+   if(!calibrationHelp.includes('briefly press the Axio button to calibrate'))throw Error('Physical calibration instructions missing');
     await capture('motion-quaternion-off');await evaluate(`document.querySelector('#pause').click()`);await capture('motion-paused');
    }
    if(page==='osc'){
@@ -154,6 +158,55 @@ try {
      const retry=await evaluate(`(async()=>{const previous=api;let reads=0;api=async(path,body)=>path==='battery'?(++reads===1?{voltage:null,percent:null}:{voltage:3.506,percent:null}):previous(path,body);await battery();await new Promise(r=>setTimeout(r,1200));api=previous;return {reads,text:document.querySelector('#battery').textContent};})()`);
      if(retry.reads!==2||retry.text!=='3.51 V')throw Error('Battery startup retry '+JSON.stringify(retry));
     }
+   }
+  }
+  if(!liveOrigin){
+   const dirtyCheck=await evaluate(`(async()=>{
+    const require=(ok,message)=>{if(!ok)throw Error(message);};
+    const blocked=()=>!window.dispatchEvent(new Event('beforeunload',{cancelable:true}));
+    // Reset the fixture view, including any changes made by the layout matrix.
+    state=normalizeSnapshot(await api('snapshot'));({overview,motion,osc,network,diagnostics}[page])();
+    if(page==='overview'){
+     require(!blocked(),'clean identity');const field=document.querySelector('#tracker-id'),original=field.value;
+     field.value='changed';require(blocked(),'dirty identity');field.value=original;require(!blocked(),'reverted identity');
+     const link=document.querySelector('.peer a');if(link)require(link.target==='_blank'&&link.rel.includes('noopener'),'peer new tab');
+    }else if(page==='osc'){
+     require(!blocked(),'clean OSC');
+     for(const id of ['main-address','calibration-address','ack-address']){
+      const field=document.querySelector('#'+id);require(field.closest('.slash')&&!field.value.startsWith('/'),'fixed slash '+id);
+      const original=field.value;field.value='/pasted/{id}';field.dispatchEvent(new Event('input',{bubbles:true}));
+      require(field.value==='pasted/{id}'&&fullAddress(id)==='/pasted/{id}','pasted slash');require(blocked(),'dirty address');
+      field.value=original;field.dispatchEvent(new Event('input',{bubbles:true}));require(!blocked(),'restored address');
+     }
+     const chip=document.querySelector('[data-group]');chip.click();require(blocked(),'chip dirty');chip.click();require(!blocked(),'chip reverted');
+     document.querySelector('#add-destination').click();require(blocked(),'destination added');
+     [...document.querySelectorAll('[data-remove]')].at(-1).click();require(!blocked(),'destination reverted');
+     const originalApi=api;document.querySelector('#interval').value=37;
+     api=async()=>{throw Error('simulated save failure')};await document.querySelector('#apply').onclick();require(blocked(),'failed save preserved');
+     api=originalApi;await document.querySelector('#validate').onclick();require(blocked(),'validation not saved');
+     await document.querySelector('#apply').onclick();require(!blocked(),'successful save');
+     const baseline=savedDraft;state.osc=structuredClone(state.osc);state.osc.editor.interval_ms=43;osc(true);
+     require(savedDraft===baseline&&blocked(),'import rerender preserves saved baseline');
+    }else if(page==='network'){
+     require(!blocked(),'clean networks');document.querySelector('#add-network').click();require(blocked(),'added network');
+     [...document.querySelectorAll('[data-delete]')].at(-1).click();require(!blocked(),'restored networks');
+     const up=document.querySelector('[data-up="1"]');if(up){up.click();require(blocked(),'reordered networks');document.querySelector('[data-down="0"]').click();require(!blocked(),'restored order');}
+     const password=document.querySelector('#ap-password');password.value='testpassword';require(blocked(),'password dirty');password.value='';require(!blocked(),'password restored');
+    }else require(!blocked(),'read only screen');
+    // Leave a deliberate draft for the native dialog test below.
+    if(readDraft)markSaved(readDraft());
+    return true;
+   })()`);
+   check.unsavedGuard=dirtyCheck;
+   if(['overview','osc','network'].includes(page)){
+    // Native browser dialog, including cancellation retaining the current screen.
+    await cdp('Runtime.evaluate',{expression:`{const field=document.querySelector('${page==='osc'?'#main-address':page==='network'?'#ap-password':'#tracker-id'}');field.focus();field.value='unsaved-native';field.dispatchEvent(new Event('input',{bubbles:true}));}`,userGesture:true});
+    const before=dialogs.length;
+    await cdp('Page.navigate',{url:origin+'/?page=diagnostics'});
+    for(let i=0;i<40&&dialogs.length===before;++i)await new Promise(r=>setTimeout(r,25));
+    if(dialogs.length===before)throw Error('Native unsaved dialog missing: '+page);
+    if(await evaluate('page')!==page)throw Error('Cancel did not preserve page');
+    await evaluate('markSaved(readDraft())');check.nativeUnsavedDialog=true;
    }
   }
   results.push({page,...check});

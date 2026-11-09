@@ -59,7 +59,7 @@ int main(int argc,char **argv){
       if(command=="ENTRY_RUN")for(unsigned i=0;i<2000;++i){clockOffset+=10;fakeMillis()+=10;tickConnectivity();}
       if(command=="ENTRY_CONFLICT")fakeMdns().hostname="axio-2";
     }
-    if(testButton){fakeDeviceControl().button=elapsed>=300&&elapsed<3500?0:1;WiFi.link=0;}
+    if(testButton){fakeDeviceControl().button=((elapsed>=100&&elapsed<200)||(elapsed>=500&&elapsed<6000))?0:1;WiFi.link=0;}
     else if(apMode)WiFi.link=0;
     else if(fakeSdk().connects>connected){connected=fakeSdk().connects;WiFi.link=WL_CONNECTED;}
     if(dashboardNetworkAllowed())tickConnectivity();
@@ -72,12 +72,19 @@ int main(int argc,char **argv){
     }
     tickDashboard();
     if(testButton){
-      if(fakeDeviceControl().sleeps){
+      if(elapsed>=5600&&elapsed<6000){
         uint8_t power=0;assert(sensor.powerRead(0x3e,power)&&power==2);
-        assert(elapsed>=3675&&elapsed<4000&&!dashboardImuAllowed());
+        assert(!dashboardImuAllowed()&&!dashboardNetworkAllowed());
+        assert(fakeDeviceControl().sleeps==0&&fakeDeviceControl().wakeMode==0);
+      }
+      if(fakeDeviceControl().sleeps){
+        assert(tracker.diagnostics.calibrationRequests==1);
+        uint8_t power=0;assert(sensor.powerRead(0x3e,power)&&power==2);
+        assert(elapsed>=6100&&elapsed<6200&&!dashboardImuAllowed());
+        assert(fakeDeviceControl().button==1&&fakeDeviceControl().wakeMode==0);
         std::cout<<"PASS: physical long press, release, BNO suspend and sleep without Wi-Fi/browser"<<std::endl;return 0;
       }
-      assert(elapsed<4200);continue;
+      assert(elapsed<6200);continue;
     }
     if(!ready&&elapsed>100){std::cout<<"READY"<<std::endl;ready=true;}
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
