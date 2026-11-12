@@ -17,6 +17,7 @@
 #include "src/connectivity/ConnectivityManager.h"
 #include "src/web/DashboardRuntime.h"
 #include "src/transport/OscRuntime.h"
+#include "src/power/FeedbackLedRuntime.h"
 FakeWiFi WiFi;FakeESP ESP;FakeWire Wire;FakeSerial Serial;unsigned long waited=0;
 bool Adafruit_BNO055::present=true;int Adafruit_BNO055::remap=0,Adafruit_BNO055::sign=0,Adafruit_BNO055::crystal=0;
 uint8_t Adafruit_I2CDevice::payload[8]={},Adafruit_I2CDevice::lastRegister=0;
@@ -25,7 +26,7 @@ std::map<std::string,std::vector<uint8_t>> fakeNvs;
 bool failNvs=false,failListener=false;
 axio::TrackerState tracker;uint64_t epoch=10000000;
 axio::RuntimeStatus legacyRuntimeStatus(){axio::RuntimeStatus s;s.wifi=WiFi.status()==WL_CONNECTED;s.ip[0]=127;s.ip[3]=1;s.outPort=16888;return s;}
-bool calibrate(){++tracker.diagnostics.calibrationRequests;return true;}
+bool calibrate(){++tracker.diagnostics.calibrationRequests;calibratedFeedbackLed(millis());return true;}
 void reset(){resetOscMetrics();tracker.diagnostics=axio::Diagnostics();epoch=uint64_t(millis())*1000;}
 uint64_t window(){return uint64_t(millis())*1000-epoch;}
 int main(int argc,char **argv){
@@ -41,6 +42,7 @@ int main(int argc,char **argv){
   prepareDashboardFlashInfo();setupConnectivity();setupOscRuntime(calibrate);
   axio::BnoDevice sensor;assert(sensor.begin());tracker.sensor=axio::SensorStatus::Ready;
   setupDashboard(tracker,sensor,reset,window);
+  setupFeedbackLed();startFeedbackLed(millis());
   auto start=std::chrono::steady_clock::now();uint32_t last=0,virtualMs=0;bool ready=false;unsigned connected=0;
   for(;;){
     auto elapsed=testButton?virtualMs++:std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-start).count();
@@ -82,6 +84,8 @@ int main(int argc,char **argv){
         uint8_t power=0;assert(sensor.powerRead(0x3e,power)&&power==2);
         assert(elapsed>=6100&&elapsed<6200&&!dashboardImuAllowed());
         assert(fakeDeviceControl().button==1&&fakeDeviceControl().wakeMode==0);
+        const auto &led=fakeDeviceControl();
+        assert(led.ledOnTransitions==6&&led.ledLevel==!FakeLedActive&&led.ledHeld&&led.deepSleepHold);
         std::cout<<"PASS: physical long press, release, BNO suspend and sleep without Wi-Fi/browser"<<std::endl;return 0;
       }
       assert(elapsed<6200);continue;

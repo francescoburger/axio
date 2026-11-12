@@ -9,9 +9,10 @@ template<class Device, class Clock> class ImuManager {
   TrackerState &state;
   Calibration &calibration;
   bool initialized = false;
+  void (*onCalibrated)()=nullptr;
  public:
-  ImuManager(Device &d, Clock &c, TrackerState &s, Calibration &t)
-      : device(d), clock(c), state(s), calibration(t) {}
+  ImuManager(Device &d, Clock &c, TrackerState &s, Calibration &t,void (*notify)()=nullptr)
+      : device(d), clock(c), state(s), calibration(t),onCalibrated(notify) {}
   void begin() {
     initialized = device.begin();
     state.sensor = initialized ? SensorStatus::Ready : SensorStatus::InitFailed;
@@ -45,6 +46,7 @@ template<class Device, class Clock> class ImuManager {
       return false;
     }
     calibration.calibrateReference(quat, euler);
+    if(onCalibrated)onCalibrated();
     return true;
   }
 };

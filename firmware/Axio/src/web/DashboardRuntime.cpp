@@ -21,6 +21,7 @@
 #include "../power/PowerController.h"
 #include "../power/SleepButton.h"
 #include "../power/WakeHold.h"
+#include "../power/FeedbackLedRuntime.h"
 #include "../connectivity/ProvisioningSocket.h"
 #include "../connectivity/ConnectivityRuntime.h"
 #include "../connectivity/ConnectivityManager.h"
@@ -56,10 +57,13 @@ struct PowerPlatform {
     communicationsOff=WiFi.enableSTA(false);return communicationsOff;
   }
   void resume(){
+    cancelSleepFeedbackLed();
     if(communicationsOff){WiFi.enableSTA(true);refreshApConfiguration();communicationsOff=false;}
   }
   void restart(){ESP.restart();}
-  void sleep(){esp_deep_sleep_start();}
+  void beginSleepFeedback(uint32_t now){beginSleepFeedbackLed(now);}
+  bool sleepFeedbackReady(){return sleepFeedbackLedReady();}
+  void sleep(){holdFeedbackLedOff();esp_deep_sleep_start();}
 } powerPlatform;
 axio::PowerController<PowerPlatform> powerController(powerPlatform);
 void ip(axio::JsonWriter &w,IPAddress address){w.add("\"%u.%u.%u.%u\"",address[0],address[1],address[2],address[3]);}
@@ -112,7 +116,7 @@ struct Platform {
     bool apActive=(WiFi.getMode()&WIFI_AP)&&WiFi.AP.started()&&uint32_t(WiFi.softAPIP())!=0;
     uint8_t mac[6]={};esp_wifi_get_mac(WIFI_IF_STA,mac);
     w.add("{\"device\":{\"id\":\"%s\",\"mac\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"ip\":",c.id,mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);ip(w,boundAp?WiFi.softAPIP():WiFi.localIP());
-    w.add(",\"hostname\":\"%s.local\",\"ap_ssid\":\"%s\",\"version\":\"4.0.0-dev\",\"osc_status\":\"%s\"},",discoveryHostname(),apSsid(),configurationError?"Configuration error":connected&&!(WiFi.getMode()&WIFI_AP)?"Active":"Suspended");
+    w.add(",\"hostname\":\"%s.local\",\"ap_ssid\":\"%s\",\"board\":\"%s\",\"version\":\"4.0.0-dev\",\"osc_status\":\"%s\"},",discoveryHostname(),apSsid(),AXIO_BOARD_NAME,configurationError?"Configuration error":connected&&!(WiFi.getMode()&WIFI_AP)?"Active":"Suspended");
     w.add("\"status\":{\"wifi_connected\":%s,\"imu\":\"%s\"},\"osc\":",connected?"true":"false",sensorStatus());
     w.raw([&](char *p,size_t n){return axio::osc::serialize(c,p,n);});
     w.add(",\"peers\":");w.raw(discoveryPeersJson);
@@ -151,6 +155,7 @@ void setupDashboard(axio::TrackerState &state,axio::BnoDevice &device,void (*res
 bool dashboardImuAllowed(){return powerController.imuAllowed();}
 void tickDashboard(bool allowWork){
   const uint32_t buttonNow=millis();
+  tickFeedbackLed(buttonNow);
   const auto buttonEvent=sleepButton.tick(buttonNow,powerPlatform.pressed(),deferred==Nothing&&!powerController.busy()&&tracker->sensor==axio::SensorStatus::Ready);
   if(buttonEvent==axio::SleepButton::Sleep)powerController.request(true,buttonNow,false);
   else if(buttonEvent==axio::SleepButton::Calibrate)calibrateOscRuntime();

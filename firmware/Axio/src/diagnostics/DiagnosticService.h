@@ -2,6 +2,7 @@
 #include "SerialProtocol.h"
 #include <math.h>
 #include "../core/TrackerState.h"
+#include "../../hardware_config.h"
 
 namespace axio {
 struct RuntimeStatus {
@@ -42,7 +43,7 @@ template<class Platform> class DiagnosticService {
     uint64_t now=platform.nowUs();
     if (!strcmp(command,"PING")) strcpy(data,"{\"pong\":true}");
     else if (!strcmp(command,"INFO")) snprintf(data,sizeof(data),
-      "{\"firmware\":\"Axio\",\"version\":\"4.0.0-dev\",\"protocol\":1,\"board\":\"XIAO_ESP32C3\",\"build\":\"%s %s\",\"cdc_on_boot\":true,\"config_engine\":%s}",__DATE__,__TIME__,platform.status().engine?"true":"false");
+      "{\"firmware\":\"Axio\",\"version\":\"4.0.0-dev\",\"protocol\":1,\"board\":\"%s\",\"build\":\"%s %s\",\"cdc_on_boot\":true,\"config_engine\":%s}",AXIO_BOARD_NAME,__DATE__,__TIME__,platform.status().engine?"true":"false");
     else if (!strcmp(command,"STATUS")) {
       RuntimeStatus s=platform.status();
       const char *states[]={"uninitialized","ready","init_failed","read_error"};

@@ -1,5 +1,13 @@
 # Validation and known limits
 
+For the latest LED implementation, see [LED feedback validation](led-feedback-validation.md),
+which records the C3/S3 software checks and builds. Its physical LED and sleep
+checks have not been run.
+
+For the later S3 port, see [XIAO ESP32S3 support and validation](xiao-esp32s3.md),
+which records the 12 November 2026 build, upload, USB checks and remaining limits.
+The historical results below retain their original scope.
+
 This page summarizes the recorded state at the close of the first development
 milestone, 9 November 2026. It does not report a new hardware session. The
 original reports in [the archive](archive/README.md) preserve intermediate

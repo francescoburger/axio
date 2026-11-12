@@ -11,6 +11,8 @@ use the [user guide](user-guide.md) to configure a tracker.
 | [Architecture](architecture.md) | Modules, timing, storage and dashboard assets |
 | [Testing and benchmarks](benchmarks.md) | Software checks and hardware measurement methods |
 | [Validation and known limits](validation.md) | Historical results and remaining coverage |
+| [XIAO ESP32S3](xiao-esp32s3.md) | Board selection, initial upload and USB validation |
+| [LED feedback validation](led-feedback-validation.md) | C3/S3 LED sequences, software checks and hardware limits |
 | [V1.1 baseline](baseline-v1.1.md) | Exact mathematical compatibility reference |
 | [Archive](archive/README.md) | Original implementation plans and verification reports |
 

@@ -6,13 +6,17 @@ import unittest
 ROOT=Path(__file__).resolve().parents[1]
 class Phase4Tests(unittest.TestCase):
     def test_low_wake_mode_and_short_press_rejection(self):
-        binary=ROOT/'.build/tests/wake_runtime'
-        binary.parent.mkdir(parents=True,exist_ok=True)
-        result=subprocess.run([shutil.which('c++'),'-std=c++11','-Wall','-Wextra','-Werror',
-                               '-I',str(ROOT/'tests/stubs/runtime'),'-I',str(ROOT/'firmware/Axio'),
-                               str(ROOT/'tests/wake_runtime_harness.cpp'),'-o',str(binary)],capture_output=True,text=True)
-        self.assertEqual(result.returncode,0,result.stderr)
-        subprocess.run([str(binary)],check=True,timeout=3)
+        for board in ('c3','s3'):
+            with self.subTest(board=board):
+                binary=ROOT/('.build/tests/wake_runtime_'+board)
+                binary.parent.mkdir(parents=True,exist_ok=True)
+                defines=['-DARDUINO_XIAO_ESP32S3'] if board=='s3' else []
+                result=subprocess.run([shutil.which('c++'),'-std=c++11','-Wall','-Wextra','-Werror',*defines,
+                                       '-I',str(ROOT/'tests/stubs/runtime'),'-I',str(ROOT/'firmware/Axio'),
+                                       str(ROOT/'tests/wake_runtime_harness.cpp'),
+                                       str(ROOT/'firmware/Axio/src/power/FeedbackLedRuntime.cpp'),'-o',str(binary)],capture_output=True,text=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                subprocess.run([str(binary)],check=True,timeout=3)
 
     def test_http_budgets_origin_token_timeout_and_battery_math(self):
         binary=ROOT/'.build/tests/phase4'

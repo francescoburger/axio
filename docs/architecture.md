@@ -32,7 +32,7 @@ no automatic reference calibration. See [the baseline](baseline-v1.1.md).
 | `src/transport/` | UDP/NVS adapter and retained historical serialization for regression |
 | `src/connectivity/` | STA policy, network journal, WPA2 fallback AP, provisioning, discovery and entry-point election |
 | `src/diagnostics/` | Bounded serial framing, commands and budgeted USB RX/TX |
-| `src/power/` | Battery sampling, button/wake policy and controlled deep sleep |
+| `src/power/` | Battery sampling, LED feedback, button/wake policy and controlled deep sleep |
 | `src/web/` | HTTP parser/runtime, service handlers, JSON writer and generated flash assets |
 | `web/` | HTML, CSS and JavaScript sources |
 
@@ -111,8 +111,18 @@ there is no state-of-charge estimate or automatic low-battery shutdown.
 ## Power
 
 The power controller sequences acknowledgement, sensor CONFIG/SUSPEND with
-readback, service shutdown, stable button release and GPIO5 LOW wake setup.
+readback, service shutdown, LED shutdown feedback, stable button release and
+active-LOW wake setup (GPIO5 on C3, RTC EXT0 GPIO4 on S3).
 At the 5 s physical-button threshold it can stop the sensor/network before
 release, remaining in `waiting_sleep_release` until deep sleep can safely begin.
 Failures attempt sensor/service recovery. Wake follows normal startup and does
 not restore or automatically recalibrate the RAM reference.
+
+`FeedbackLed.h` advances at most one timed LED edge per loop call using unsigned
+`millis()` arithmetic. `FeedbackLedRuntime.cpp` maps it to the board-specific
+pin and polarity in `hardware_config.h`. Firmware initializes the output off
+before wake qualification, signals startup after setup, and holds the inactive
+GPIO level across deep sleep. `ImuManager::calibrateReference()` calls an optional
+notification only after successful reference calibration, so every production
+command source shares the same feedback. The power controller waits for the
+shutdown cue as well as stable button release before sleeping.

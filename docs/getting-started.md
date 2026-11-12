@@ -2,21 +2,37 @@
 
 ## Hardware
 
-Axio targets the Seeed XIAO ESP32C3 with a BNO055 at I²C address **0x29**.
+Axio supports builds for the Seeed XIAO ESP32C3 and XIAO ESP32S3 with a
+BNO055 at I²C address **0x29**. The C3 remains the default target. S3
+hardware validation is [recorded separately](xiao-esp32s3.md) from successful
+compilation.
 All pin definitions are centralized in
 [`hardware_config.h`](../firmware/Axio/hardware_config.h).
 
-| Signal | XIAO pin | Firmware definition |
-| --- | --- | --- |
-| BNO055 SDA | D4 / GPIO6 | `SDA_PIN` |
-| BNO055 SCL | D5 / GPIO7 | `SCL_PIN` |
-| Button to GND, internal pull-up | GPIO5 | `BUTTON_PIN`, active LOW |
-| Battery ADC input | A0 / D0 / GPIO2 | `BATTERY_ADC_PIN` |
+| Signal | XIAO pad | C3 GPIO | S3 GPIO | Firmware definition |
+| --- | --- | --- | --- | --- |
+| BNO055 SDA | D4 | 6 | 5 | `SDA_PIN` |
+| BNO055 SCL | D5 | 7 | 6 | `SCL_PIN` |
+| Button to GND, internal pull-up | D3 | 5 | 4 | `BUTTON_PIN`, active LOW |
+| Battery ADC input | A0 / D0 | 2 | 1 | `BATTERY_ADC_PIN` |
+| Feedback LED | C3: D1; S3: onboard user LED | 3 | 21 | `FEEDBACK_LED_PIN` |
+
+These are the user-confirmed pad connections on both boards. Match pad labels,
+not C3 GPIO numbers, when moving the wiring to S3. The S3 mapping follows the
+[Seeed pinout](https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/).
+
+For the C3 feedback LED, connect D1 / GPIO3 through a series resistor to the
+LED anode, and connect its cathode to GND. This is an active-HIGH output on a
+previously unassigned pin. S3 uses its onboard GPIO21 user LED, active LOW
+according to [Seeed](https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/).
+Change `FEEDBACK_LED_PIN` and `FEEDBACK_LED_ACTIVE_LEVEL` in the appropriate
+board branch of `hardware_config.h` for different LED wiring. The charging LED
+is separate. See the [feedback patterns](user-guide.md#led-feedback).
 
 Use a common ground and check the supply and logic levels for your BNO055
 breakout. The battery voltage formula assumes the existing divider scales the
 ADC input by two; this repository does not provide a complete battery or
-charging circuit design. GPIO2 is the ADC input, not a direct connection for
+charging circuit design. The ADC pin is a divider input, not a direct connection for
 an arbitrary battery voltage.
 
 The sensor configuration preserves axis remap P0 and the external crystal
@@ -78,6 +94,20 @@ the default partition layout and enabled USB CDC. The scripts record all board
 options explicitly. Matching versions improve reproducibility; they do not
 guarantee identical binaries across hosts or detect locally modified libraries.
 
+For the XIAO ESP32S3, build with:
+
+```sh
+bash scripts/compile.sh --board s3
+```
+
+This selects `esp32:esp32:XIAO_ESP32S3`, CPU 240 MHz, 8 MB flash,
+`default_8MB` partitions, hardware USB CDC/JTAG with CDC enabled, and disabled
+PSRAM. It writes separate output to `.build/s3/artifacts/` and build files to
+`.build/s3/arduino/`. The S3 button uses RTC EXT0 LOW wake with an RTC pull-up;
+the C3 retains its GPIO wake path. Both retain the existing hold-to-wake logic.
+See [Espressif's EXT0 documentation](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32s3/api-reference/system/sleep_modes.html#external-wakeup-ext0).
+The historical `--baseline` build remains C3 only.
+
 Host tests normally look for `imumaths` in
 `~/Documents/Arduino/libraries/Adafruit_BNO055`. To use another installation:
 
@@ -97,10 +127,16 @@ reference source unchanged.
 ## Arduino IDE
 
 Open [`firmware/Axio/Axio.ino`](../firmware/Axio/Axio.ino), select
-**XIAO_ESP32C3**, and use the same core and library versions. Set
+**XIAO_ESP32C3** or **XIAO_ESP32S3**, and use the same core and library versions. Set
 **USB CDC On Boot: Enabled**. In the locked core, this corresponds to the CLI
 option `CDCOnBoot=default`. With CDC disabled, `Serial` uses UART0 and the Axio
 build rejects that configuration.
+
+For S3, also select **USB Mode: Hardware CDC and JTAG**, **Upload Mode:
+UART0 / Hardware CDC**, **CPU Frequency: 240 MHz**, **Flash Size: 8 MB**,
+**Partition Scheme: Default with spiffs (3MB APP/1.5MB SPIFFS)** and
+**PSRAM: Disabled** to match the script. Keep **Erase All Flash Before Sketch
+Upload: Disabled**.
 
 The generated `src/web/WebAssets.h` is included in the repository for IDE
 builds. After editing the HTML/CSS/JavaScript sources, regenerate it first:
@@ -121,6 +157,16 @@ bash scripts/upload.sh --port /dev/cu.usbmodem2101
 Replace the example port with your device's port. The script builds and uploads
 with `EraseFlash=none`; it does not perform a factory reset. USB ports may
 change after reset or upload.
+
+For S3, use its actual USB port and select the board explicitly:
+
+```sh
+bash scripts/upload.sh --board s3 --port /dev/cu.usbmodem2101
+```
+
+The script builds the S3 firmware before upload and uses only the S3 artifact
+directory. It keeps `EraseFlash=none`. `INFO` and the existing dashboard report
+the selected board name.
 
 With no usable saved network, the WPA2 fallback AP is requested after about
 15 seconds offline. Join `Axio-<Tracker ID>` using the default password

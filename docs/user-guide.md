@@ -129,16 +129,45 @@ new OSC sample.
 ## Physical button and sleep
 
 - Brief press and release while running: calibrate the reference.
-- Hold for 5 seconds: suspend the sensor and stop communications. Release the
-  button to complete entry into deep sleep after a stable release of 100 ms.
+- Hold for 5 seconds: suspend the sensor and stop communications. The LED then
+  flashes three times. Deep sleep starts after both the LED sequence completes
+  and the button has been released stably for 100 ms.
 - Hold for about 3 seconds to wake. The internal acceptance threshold is 1.6 s;
   perceived wake time includes boot. A button held during startup must be
   released before normal button actions are armed.
 
-Wake uses GPIO5 LOW with a pull-up. A long sleep press does not also calibrate
+Wake uses the active-LOW button with a pull-up: GPIO5 on C3, GPIO4 with RTC
+EXT0 on S3. A long sleep press does not also calibrate
 on release. The sensor's SUSPEND setting is read back before sleep; preparation
 errors prevent normal completion and trigger a recovery attempt. Deep-sleep
 current and exact physical timing have not been independently measured.
+
+## LED feedback
+
+| Event | Signal |
+| --- | --- |
+| Startup or accepted wake | One 500 ms pulse after firmware setup completes |
+| Successful reference calibration | Two 100 ms pulses, separated by 100 ms off |
+| Entering deep sleep | Three 100 ms pulses, separated by 100 ms off, after the sensor and communications stop |
+
+Each signal ends with a 100 ms dark interval. The LED is off during normal
+operation and is held at its inactive level for deep sleep. Startup feedback
+indicates that firmware setup has finished; it is not a sensor-health check.
+A rejected short wake press keeps the LED off and returns to sleep.
+
+Calibration feedback is shared by the physical button, dashboard, USB and OSC,
+including supported legacy aliases. Failed calibration does not generate a
+confirmation. A calibration arriving during startup waits until the startup
+signal finishes. Repeated requests during a signal coalesce into one pending
+confirmation. Shutdown takes priority and clears pending confirmations;
+sleep-preparation recovery cancels the shutdown signal.
+
+The patterns use the normal loop without blocking delays. Delayed loop service
+can extend a pulse; missed transitions are not replayed in a burst. C3 uses an
+external LED on GPIO3 / D1, active HIGH; S3 uses its onboard GPIO21 user LED,
+active LOW. Both pin and polarity are set in
+[`hardware_config.h`](../firmware/Axio/hardware_config.h). See
+[Getting started](getting-started.md#hardware) for wiring.
 
 ## Known operating limits
 

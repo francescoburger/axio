@@ -18,16 +18,19 @@ struct Device {
   bool readLinear(imu::Vector<3> &v) { v=imu::Vector<3>(35,-70,17.5); return read(2); }
   bool readGyro(imu::Vector<3> &v) { v=imu::Vector<3>(1.99,-1.99,.99); return read(3); }
 };
+unsigned calibrationNotifications=0;
+void referenceChanged(){++calibrationNotifications;}
 int main() {
   axio::Calibration calibration;
   assert(calibration.quatOffset.w()==1 && calibration.yawOffset==0);
   Clock clock;
   Device device;
   axio::TrackerState state;
-  axio::ImuManager<Device,Clock> manager(device,clock,state,calibration);
+  axio::ImuManager<Device,Clock> manager(device,clock,state,calibration,referenceChanged);
   assert(!state.latest.valid && state.sensor==axio::SensorStatus::Uninitialized);
   assert(!manager.acquire());
   assert(!manager.calibrateReference() && device.calls==0);
+  assert(calibrationNotifications==0);
   // A first failed acquisition must not create any apparently valid sample.
   Device broken;
   broken.fail=0;
@@ -47,6 +50,7 @@ int main() {
   assert(first.gx==float(1/1500.0) && first.gy==float(-1/1500.0) && first.gz==0);
   assert(state.diagnostics.lastReadUs==100 && state.diagnostics.acquired==1);
   assert(manager.calibrateReference());
+  assert(calibrationNotifications==1);
   assert(calibration.quatOffset.w()==2 && calibration.yawOffset==359);
   assert(manager.acquire() && state.latest.q0==4 && state.latest.yaw==0);
   // Fail every position of the four-block acquisition. Never publish partial data.
@@ -67,6 +71,7 @@ int main() {
   for (int k=0;k<2;++k) {
     device.fail=device.calls+k;
     assert(!manager.calibrateReference());
+    assert(calibrationNotifications==1);
     assert(calibration.quatOffset.w()==2 && calibration.yawOffset==359);
   }
   calibration.calibrateReference(imu::Quaternion(.5,.1,.2,.3),imu::Vector<3>(-.9375,0,0));

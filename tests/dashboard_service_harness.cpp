@@ -21,11 +21,14 @@ struct Platform {
 };
 struct SensorPower {
   bool pressedValue=false,wake=true,failWrite=false,failRead=false,stopReady=true;
+  bool feedbackReady=true;unsigned feedbackStarts=0;
   uint8_t op=12,power=0;unsigned stopped=0,slept=0,restarted=0,resumed=0;
   bool pressed(){return pressedValue;}bool prepareWake(){return wake;}
   bool read(uint8_t reg,uint8_t &v){if(failRead)return false;v=reg==0x3d?op:power;return true;}
   bool write(uint8_t reg,uint8_t v){if(failWrite)return false;if(reg==0x3d)op=v;else power=v;return true;}
   bool stop(){++stopped;return stopReady;}void sleep(){++slept;}void restart(){++restarted;}void resume(){++resumed;}
+  void beginSleepFeedback(uint32_t){++feedbackStarts;}
+  bool sleepFeedbackReady(){return feedbackReady;}
 };
 int main(){
   Platform p;axio::DashboardService<Platform> service(p);
@@ -91,5 +94,14 @@ int main(){
   late.pressedValue=false;g.tick(50);late.wake=false;g.tick(150);
   assert(g.error&&late.slept==0&&late.resumed==1);
   g.tick(175);g.tick(200);assert(g.imuAllowed()&&late.power==0&&late.op==12);
+  // A pending LED cue delays sleep without restarting the shutdown or
+  // bypassing the final stable-release and wake-configuration checks.
+  SensorPower led;led.feedbackReady=false;axio::PowerController<SensorPower> h(led);
+  h.request(true,0,false);h.tick(0);h.tick(25);h.tick(45);h.tick(46);
+  h.tick(47);h.tick(147);h.tick(1000);
+  assert(led.feedbackStarts==1&&led.stopped==1&&led.slept==0&&!h.imuAllowed());
+  led.feedbackReady=true;led.pressedValue=true;h.tick(1001);
+  led.pressedValue=false;h.tick(1010);h.tick(1109);assert(led.slept==0);
+  h.tick(1110);assert(led.slept==1&&led.feedbackStarts==1);
   puts("PASS");
 }

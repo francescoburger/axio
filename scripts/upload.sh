@@ -3,12 +3,24 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-if [[ $# -ne 2 || "$1" != '--port' || -z "$2" ]]; then
-  echo 'Usage: bash scripts/upload.sh --port /dev/cu.usbmodem... (builds and uploads)' >&2
+usage() { echo 'Usage: bash scripts/upload.sh [--board c3|s3] --port /dev/cu.usbmodem... (builds and uploads; default: c3)'; }
+BOARD=c3
+PORT=''
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --board) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; BOARD="$2"; shift 2 ;;
+    --port) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; PORT="$2"; shift 2 ;;
+    --help|-h) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+if [[ -z "$PORT" ]]; then
+  usage >&2
   exit 2
 fi
-PORT="$2"
-bash scripts/compile.sh
-arduino-cli upload --fqbn esp32:esp32:XIAO_ESP32C3 \
-  --board-options 'CDCOnBoot=default,CPUFreq=160,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=default,DebugLevel=none,EraseFlash=none,UploadSpeed=921600' \
-  --port "$PORT" --input-dir "$ROOT/.build/artifacts" "$ROOT/firmware/Axio"
+source "$ROOT/scripts/board_config.sh"
+axio_board_config "$BOARD"
+bash scripts/compile.sh --board "$BOARD"
+arduino-cli upload --fqbn "$FQBN" \
+  --board-options "$BOARD_OPTIONS" \
+  --port "$PORT" --input-dir "$ROOT/$OUTPUT" "$ROOT/firmware/Axio"

@@ -2,8 +2,21 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-if [[ $# -gt 1 || ( $# -eq 1 && "$1" != '--baseline' ) ]]; then
-  echo 'Usage: bash scripts/compile.sh [--baseline]' >&2
+usage() { echo 'Usage: bash scripts/compile.sh [--board c3|s3] [--baseline] (build only; default: c3)'; }
+BOARD=c3
+BASELINE=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --board) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; BOARD="$2"; shift 2 ;;
+    --baseline) BASELINE=true; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+source "$ROOT/scripts/board_config.sh"
+axio_board_config "$BOARD"
+if $BASELINE && [[ "$BOARD" != c3 ]]; then
+  echo 'FAIL: the immutable baseline is supported only on c3' >&2
   exit 2
 fi
 command -v arduino-cli >/dev/null || { echo 'FAIL: Arduino CLI missing' >&2; exit 1; }
@@ -14,23 +27,22 @@ export ARDUINO_BUILD_CACHE_PATH="$ROOT/.build/cache"
 python3 -B scripts/check_toolchain.py
 python3 -B scripts/package_web.py
 SKETCH="$ROOT/firmware/Axio"
-BUILD="$ROOT/.build/arduino"
-OUTPUT="$ROOT/.build/artifacts"
-if [[ "${1:-}" == '--baseline' ]]; then
+BUILD="$ROOT/$BUILD"
+OUTPUT="$ROOT/$OUTPUT"
+if $BASELINE; then
   SKETCH="$ROOT/.build/baseline/HandTrackerV1_1"
   BUILD="$ROOT/.build/baseline-build"
   OUTPUT="$ROOT/.build/baseline-artifacts"
   mkdir -p "$SKETCH"
   cp "$ROOT/reference/HandTrackerV1_1.ino" "$SKETCH/HandTrackerV1_1.ino"
 fi
-# FQBN and options come from the installed ESP32 3.3.12 core.
 arduino-cli compile \
-  --fqbn esp32:esp32:XIAO_ESP32C3 \
-  --board-options 'CDCOnBoot=default,CPUFreq=160,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=default,DebugLevel=none,EraseFlash=none,UploadSpeed=921600' \
+  --fqbn "$FQBN" \
+  --board-options "$BOARD_OPTIONS" \
   --build-path "$BUILD" \
   --warnings all "$SKETCH"
 # --output-dir triggers the core savehex hooks, which would also export
 # into the sketch folder. Copy artifacts explicitly to avoid that write.
 mkdir -p "$OUTPUT"
 cp "$BUILD"/*.bin "$BUILD"/*.elf "$BUILD"/*.map "$OUTPUT/"
-echo "PASS: built $SKETCH (no upload)"
+echo "PASS: built $SKETCH for $FQBN (no upload); artifacts: $OUTPUT"

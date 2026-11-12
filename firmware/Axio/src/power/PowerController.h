@@ -62,12 +62,14 @@ template<class Platform> class PowerController {
         // Sensor and communications are already off. LOW wake would wake
         // immediately while held; wait here without restarting any service.
         state=SleepReleaseWait;releaseSeen=false;
+        platform.beginSleepFeedback(now);
       }return;
     }
     if(state==SleepReleaseWait){
       if(platform.pressed()){releaseSeen=false;return;}
       if(!releaseSeen){releaseSeen=true;released=now;return;}
       if(uint32_t(now-released)<100)return;
+      if(!platform.sleepFeedbackReady())return;
       if(!platform.prepareWake()){fail("wake_configuration_failed",now);return;}
       platform.sleep();return;
     }

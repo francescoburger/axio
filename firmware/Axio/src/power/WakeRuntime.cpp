@@ -5,6 +5,10 @@
 #include <soc/rtc_cntl_reg.h>
 #include "../../hardware_config.h"
 #include "WakeHold.h"
+#include "FeedbackLedRuntime.h"
+#if defined(ARDUINO_XIAO_ESP32S3)
+#include <driver/rtc_io.h>
+#endif
 
 // RTC memory survives deep sleep; no NVS writes. The stub runs before the
 // bootloader, so bootloader/Arduino startup time contributes to the hold.
@@ -21,14 +25,27 @@ extern "C" void RTC_IRAM_ATTR esp_wake_deep_sleep(){
 
 bool prepareButtonSleep(){
   pinMode(BUTTON_PIN,BUTTON_USE_PULLUP?INPUT_PULLUP:INPUT);
+#if defined(ARDUINO_XIAO_ESP32S3)
+  // EXT0 leaves the digital GPIO usable until sleep starts. Keep the RTC
+  // pull-up active during sleep for the same button-to-GND circuit.
+  const auto pin=static_cast<gpio_num_t>(BUTTON_PIN);
+  if(rtc_gpio_pullup_en(pin)!=ESP_OK||rtc_gpio_pulldown_dis(pin)!=ESP_OK)return false;
+  return esp_sleep_enable_ext0_wakeup(pin,BUTTON_ACTIVE_LEVEL)==ESP_OK;
+#else
   // Keep LOW wake: the SDK automatically uses a pull-up for this mode.
   // HIGH wake would install a pull-down, so our button-to-GND circuit could
   // never signal release. PowerController waits for release after shutdown.
   return esp_deep_sleep_enable_gpio_wakeup(uint64_t(1)<<BUTTON_PIN,ESP_GPIO_WAKEUP_GPIO_LOW)==ESP_OK;
+#endif
 }
 
 void qualifyButtonWake(){
+#if defined(ARDUINO_XIAO_ESP32S3)
+  if(esp_sleep_get_wakeup_cause()!=ESP_SLEEP_WAKEUP_EXT0)return;
+  rtc_gpio_deinit(static_cast<gpio_num_t>(BUTTON_PIN));
+#else
   if(esp_sleep_get_wakeup_cause()!=ESP_SLEEP_WAKEUP_GPIO)return;
+#endif
   pinMode(BUTTON_PIN,BUTTON_USE_PULLUP?INPUT_PULLUP:INPUT);
   axio::WakeHold hold;
   const uint32_t period=esp_clk_slowclk_cal_get();
@@ -38,8 +55,10 @@ void qualifyButtonWake(){
     if(result==axio::WakeHold::Accepted)return;
     if(result==axio::WakeHold::Rejected){
       // The BNO remains suspended: this path precedes IMU/Wi-Fi/USB setup.
-      if(esp_deep_sleep_enable_gpio_wakeup(uint64_t(1)<<BUTTON_PIN,ESP_GPIO_WAKEUP_GPIO_LOW)==ESP_OK)
+      if(prepareButtonSleep()){
+        holdFeedbackLedOff();
         esp_deep_sleep_start();
+      }
       // Fail closed if wake configuration fails: do not activate the device.
     }
     delay(1);

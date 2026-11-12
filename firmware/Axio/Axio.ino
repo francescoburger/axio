@@ -9,6 +9,7 @@
 #include "src/diagnostics/UsbDiagnostics.h"
 #include "src/web/DashboardRuntime.h"
 #include "src/power/WakeHold.h"
+#include "src/power/FeedbackLedRuntime.h"
 #if !ARDUINO_USB_CDC_ON_BOOT
 #error "Axio USB diagnostics require USB CDC On Boot: Enabled"
 #endif
@@ -20,7 +21,8 @@ MonotonicClock monotonicClock;
 axio::BnoDevice sensor;
 axio::TrackerState tracker;
 axio::Calibration calibration;
-axio::ImuManager<axio::BnoDevice, MonotonicClock> imuManager(sensor, monotonicClock, tracker, calibration);
+void referenceCalibrated(){calibratedFeedbackLed(uint32_t(millis()));}
+axio::ImuManager<axio::BnoDevice, MonotonicClock> imuManager(sensor, monotonicClock, tracker, calibration,referenceCalibrated);
 axio::Scheduler scheduler;
 
 void calibrateReference() { imuManager.calibrateReference(); }
@@ -37,6 +39,7 @@ axio::DiagnosticService<DiagnosticPlatform> diagnosticService(tracker, diagnosti
 axio::UsbDiagnostics<decltype(diagnosticService)> usbDiagnostics(diagnosticService);
 
 void setup() {
+  setupFeedbackLed();
   qualifyButtonWake();
   setCpuFrequencyMhz(160);
   prepareDashboardFlashInfo();
@@ -49,6 +52,7 @@ void setup() {
   setupOscRuntime([]()->bool { return imuManager.calibrateReference(); });
   setupDashboard(tracker,sensor,[](){diagnosticService.resetMetricsNow();},[]()->uint64_t{return diagnosticService.windowUs();});
   diagnosticService.startWindow();
+  startFeedbackLed(uint32_t(millis()));
 }
 
 void loop() {
