@@ -39,6 +39,7 @@ axio::DiagnosticService<DiagnosticPlatform> diagnosticService(tracker, diagnosti
 axio::UsbDiagnostics<decltype(diagnosticService)> usbDiagnostics(diagnosticService);
 
 void setup() {
+  // Only force the LED inactive before deciding whether this boot may run.
   setupFeedbackLed();
   qualifyButtonWake();
   setCpuFrequencyMhz(160);

@@ -34,6 +34,8 @@ AP name. The individual hardware hostname remains independent of that ID.
 **Restart** and **Sleep** require confirmation. Saved settings survive restart;
 the in-memory calibration reference starts again at identity quaternion and
 zero yaw. Sleep is deep sleep rather than an electrical power switch.
+Every reset, including **Restart**, leaves Axio logically off; release the
+physical button and hold it again to resume operation.
 
 The battery header displays measured voltage. A missing measurement is shown as
 `—`. State of charge, charging status and remaining runtime are not estimated.
@@ -135,6 +137,16 @@ new OSC sample.
 - Hold for about 3 seconds to wake. The internal acceptance threshold is 1.6 s;
   perceived wake time includes boot. A button held during startup must be
   released before normal button actions are armed.
+- Connecting or disconnecting USB, restoring power after battery discharge,
+  and any reset leave Axio logically off. After power is available, release
+  the button and make a fresh long press. A button already held during power
+  restoration must first be released for 100 ms before deep sleep is armed.
+
+Normal startup requires both a deep-sleep reset and the board's button wake
+cause, followed by the existing long-press check. Other boots return to sleep
+before IMU, application USB diagnostics, Wi-Fi, OSC or HTTP initialization.
+No power-state flag is written to flash. See
+[button-only boot validation and hardware limits](button-boot-validation.md).
 
 Wake uses the active-LOW button with a pull-up: GPIO5 on C3, GPIO4 with RTC
 EXT0 on S3. A long sleep press does not also calibrate

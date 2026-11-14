@@ -19,5 +19,6 @@ class WakeHold {
   }
 };
 }
+// Returns only after a qualified button wake; every other boot stays off.
 void qualifyButtonWake();
 bool prepareButtonSleep();

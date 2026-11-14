@@ -1,5 +1,13 @@
 # Validation and known limits
 
+For the current power-restoration/reset policy, see
+[button-only boot validation](button-boot-validation.md). The historical
+hardware results below do not validate this firmware change.
+The implementation is complete and accepted by the user after the S3 upload:
+working behavior and acceptable deep-sleep consumption were user-reported.
+USB power restoration after complete battery discharge remains NOT RUN and
+is deferred to a later user test; it does not keep the implementation task open.
+
 For the latest LED implementation, see [LED feedback validation](led-feedback-validation.md),
 which records the C3/S3 software checks and builds. Its physical LED and sleep
 checks have not been run.

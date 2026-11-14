@@ -7,7 +7,9 @@ for monitoring, network setup and OSC configuration.
 ## Get started
 
 1. Check the [hardware and build instructions](docs/getting-started.md).
-2. Connect Axio to your Wi-Fi, or join its WPA2 fallback access point and open
+2. Hold the D3 button for about 3 seconds to turn Axio on. Connecting power,
+   USB or resetting the board leaves it logically off. Connect Axio to your Wi-Fi,
+   or join its WPA2 fallback access point and open
    `http://192.168.4.1/`. The default AP password is `12345678`.
 3. On the same LAN, open `http://axio.local/`.
 4. In **OSC**, set the receiving computer's LAN IPv4 address and UDP port,
@@ -71,7 +73,8 @@ S3, or an external LED on GPIO3 / D1 on C3. Pin and polarity are configurable in
    [wiring table](docs/getting-started.md#hardware) for your board.
 5. Connect the XIAO by USB, select its actual port under **Tools → Port**, close
    Serial Monitor, and click **Upload**. Wait for the upload to finish before
-   following the Wi-Fi connection steps above. The port may change after reset.
+   holding D3 to turn Axio on and following the Wi-Fi connection steps above.
+   The port may change after reset or disappear during deep sleep.
 
 The dashboard assets are already included for IDE builds. If you edit the web
 sources, regenerate them with `python3 -B scripts/package_web.py` before
