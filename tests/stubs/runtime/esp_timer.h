@@ -1,6 +1,9 @@
 #pragma once
 #include <stdint.h>
-#ifdef AXIO_DASHBOARD_TEST_CLOCK
+#ifdef AXIO_WAKE_TEST_CLOCK
+#include "Arduino.h"
+inline int64_t esp_timer_get_time(){return int64_t(fakeDeviceControl().rtcUs);}
+#elif defined(AXIO_DASHBOARD_TEST_CLOCK)
 #include "WiFi.h"
 inline int64_t esp_timer_get_time(){return int64_t(millis())*1000;}
 #else

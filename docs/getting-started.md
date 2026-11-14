@@ -168,6 +168,13 @@ The script builds the S3 firmware before upload and uses only the S3 artifact
 directory. It keeps `EraseFlash=none`. `INFO` and the existing dashboard report
 the selected board name.
 
+After upload or any reset, Axio stays logically off. With power available,
+release D3, then hold it for about 3 seconds to enable the tracker. USB
+diagnostics and networking are available only after this accepted button wake.
+USB may disappear in deep sleep; use the board's existing BOOT/RESET download
+procedure if a later upload cannot reach the port. See
+[power behavior and hardware limits](button-boot-validation.md).
+
 With no usable saved network, the WPA2 fallback AP is requested after about
 15 seconds offline. Join `Axio-<Tracker ID>` using the default password
 `12345678` (or your saved AP password), then open `http://192.168.4.1/` manually.

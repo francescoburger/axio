@@ -13,6 +13,7 @@ use the [user guide](user-guide.md) to configure a tracker.
 | [Validation and known limits](validation.md) | Historical results and remaining coverage |
 | [XIAO ESP32S3](xiao-esp32s3.md) | Board selection, initial upload and USB validation |
 | [LED feedback validation](led-feedback-validation.md) | C3/S3 LED sequences, software checks and hardware limits |
+| [Button-only boot validation](button-boot-validation.md) | Power restoration/reset policy, C3/S3 checks and electrical limits |
 | [V1.1 baseline](baseline-v1.1.md) | Exact mathematical compatibility reference |
 | [Archive](archive/README.md) | Original implementation plans and verification reports |
 

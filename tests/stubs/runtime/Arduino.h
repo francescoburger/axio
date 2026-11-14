@@ -22,6 +22,9 @@ struct FakeDeviceControl {
   unsigned rtcDeinits=0;uint64_t rtcUs=0;
   int ledLevel=!FakeLedActive;bool ledOutput=false,ledHeld=false,deepSleepHold=false;
   unsigned ledWrites=0,ledOnTransitions=0;
+  int resetReason=1;unsigned wakeDisables=0;
+  bool extraWake=false,failDisableWake=false;
+  void (*onDelay)(unsigned long)=nullptr;
 };
 inline FakeDeviceControl &fakeDeviceControl(){static FakeDeviceControl c;return c;}
 inline void pinMode(int pin,int mode){if(pin==FakeLedPin)fakeDeviceControl().ledOutput=mode==OUTPUT;}
@@ -40,4 +43,7 @@ struct FakeESP {
 };
 extern FakeESP ESP;
 
-inline void delay(unsigned long ms){fakeDeviceControl().rtcUs+=uint64_t(ms)*1000;}
+inline void delay(unsigned long ms){
+  auto &hw=fakeDeviceControl();hw.rtcUs+=uint64_t(ms)*1000;
+  if(hw.onDelay)hw.onDelay(ms);
+}

@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <esp_sleep.h>
+#include <esp_system.h>
+#include <esp_timer.h>
 #include <esp_private/esp_clk.h>
 #include <soc/rtc.h>
 #include <soc/rtc_cntl_reg.h>
@@ -24,6 +26,8 @@ extern "C" void RTC_IRAM_ATTR esp_wake_deep_sleep(){
 }
 
 bool prepareButtonSleep(){
+  // Every off path must arm only the physical button, never a timer or USB.
+  if(esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL)!=ESP_OK)return false;
   pinMode(BUTTON_PIN,BUTTON_USE_PULLUP?INPUT_PULLUP:INPUT);
 #if defined(ARDUINO_XIAO_ESP32S3)
   // EXT0 leaves the digital GPIO usable until sleep starts. Keep the RTC
@@ -39,28 +43,49 @@ bool prepareButtonSleep(){
 #endif
 }
 
+namespace {
+[[noreturn]] void remainOff(){
+  holdFeedbackLedOff();
+  // LOW wake is level-triggered. A button held across power restoration (or
+  // pressed again after a rejected wake) must be released before sleep.
+  bool releaseSeen=false;
+  uint64_t releasedAt=0;
+  for(;;){
+    const uint64_t now=uint64_t(esp_timer_get_time());
+    if(digitalRead(BUTTON_PIN)==BUTTON_ACTIVE_LEVEL)releaseSeen=false;
+    else {
+      if(!releaseSeen){releaseSeen=true;releasedAt=now;}
+      if(now-releasedAt>=100000)break;
+    }
+    delay(1);
+  }
+  if(prepareButtonSleep())esp_deep_sleep_start();
+  // Configuration failure must never fall through into application setup or
+  // repeatedly reset. Recovery requires an external reset after fixing it.
+  for(;;)delay(1000);
+}
+}
+
 void qualifyButtonWake(){
+  const bool fromSleep=esp_reset_reason()==ESP_RST_DEEPSLEEP;
 #if defined(ARDUINO_XIAO_ESP32S3)
-  if(esp_sleep_get_wakeup_cause()!=ESP_SLEEP_WAKEUP_EXT0)return;
+  const bool fromButton=esp_sleep_get_wakeup_cause()==ESP_SLEEP_WAKEUP_EXT0;
   rtc_gpio_deinit(static_cast<gpio_num_t>(BUTTON_PIN));
 #else
-  if(esp_sleep_get_wakeup_cause()!=ESP_SLEEP_WAKEUP_GPIO)return;
+  const bool fromButton=esp_sleep_get_wakeup_cause()==ESP_SLEEP_WAKEUP_GPIO;
 #endif
   pinMode(BUTTON_PIN,BUTTON_USE_PULLUP?INPUT_PULLUP:INPUT);
+  // Off is the default after power loss, brownout, USB, software or watchdog
+  // reset. RTC ticks are used only after a genuine button deep-sleep wake;
+  // no persisted ON flag can accidentally restart the device after discharge.
+  if(!fromSleep||!fromButton)remainOff();
   axio::WakeHold hold;
   const uint32_t period=esp_clk_slowclk_cal_get();
   for(;;){
     const uint64_t elapsed=rtc_time_slowclk_to_us(rtc_time_get()-buttonWakeTicks,period);
     const auto result=hold.tick(elapsed,digitalRead(BUTTON_PIN)==BUTTON_ACTIVE_LEVEL);
     if(result==axio::WakeHold::Accepted)return;
-    if(result==axio::WakeHold::Rejected){
-      // The BNO remains suspended: this path precedes IMU/Wi-Fi/USB setup.
-      if(prepareButtonSleep()){
-        holdFeedbackLedOff();
-        esp_deep_sleep_start();
-      }
-      // Fail closed if wake configuration fails: do not activate the device.
-    }
+    if(result==axio::WakeHold::Rejected)remainOff();
     delay(1);
   }
 }
