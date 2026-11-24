@@ -70,6 +70,11 @@ There is no periodic application scan or RSSI-based preemption. The fallback
 AP is requested after 15 s offline, retains WPA2 and closes after STA connects.
 OSC requires STA IPv4 and disabled AP mode.
 
+Wi-Fi modem power saving is disabled with `WiFi.setSleep(false)`
+(`WIFI_PS_NONE`) before STA starts. The locked Arduino core retains this
+preference and reapplies it whenever STA starts again, including radio
+restarts for AP configuration and recovery from an interrupted sleep transition.
+
 Discovery runs only on STA through the mDNS component included with the locked
 ESP32 core. `_axio._udp` advertises tracker identity/listener information and
 `_http._tcp` advertises the dashboard. Queries are asynchronous and share a

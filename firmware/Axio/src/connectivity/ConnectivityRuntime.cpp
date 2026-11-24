@@ -50,6 +50,8 @@ void setupConnectivity() {
   // Read SDK flash config before selecting RAM storage. Never erase or replace it.
   setupDiscoveryIdentity();
   WiFi.setAutoReconnect(false);
+  // Store WIFI_PS_NONE before STA starts; Arduino reapplies it on every STA start.
+  WiFi.setSleep(false);
   bool started=WiFi.STA.begin(false);
   wifi_config_t old={};WifiNetwork legacy;
   bool read=started&&esp_wifi_get_config(WIFI_IF_STA,&old)==ESP_OK;
